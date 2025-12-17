@@ -1,0 +1,30 @@
+{
+  "name": "no-tomorrow-brewing",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/react": "^4.4.2",
+    "@astrojs/tailwind": "^5.1.0",
+    "@iconify/json": "^2.2.418",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "astro": "^5.16.5",
+    "astro-icon": "^1.1.5",
+    "colorthief": "^2.6.0",
+    "date-fns": "^4.1.0",
+    "highcharts": "^12.4.0",
+    "highcharts-react-official": "^3.2.3",
+    "html-to-image": "^1.11.13",
+    "papaparse": "^5.5.3",
+    "react": "^19.2.3",
+    "react-barcode": "^1.6.1",
+    "react-dom": "^19.2.3",
+    "tailwindcss": "^3.4.4"
+  }
+}

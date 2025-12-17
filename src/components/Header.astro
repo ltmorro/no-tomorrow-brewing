@@ -1,0 +1,47 @@
+---
+// Normalize pathname - remove trailing slash for consistent comparison
+const pathname = Astro.url.pathname.replace(/\/$/, '') || '/';
+
+const navItems = [
+  { href: '/', label: 'Taproom' },
+  { href: '/mission-control', label: 'Mission Control' },
+  { href: '/library', label: 'The Library' },
+];
+
+function isActive(href: string): boolean {
+  if (href === '/') {
+    return pathname === '/' || pathname === '';
+  }
+  // Check exact match or if pathname starts with href (for nested routes)
+  return pathname === href || pathname.startsWith(href + '/');
+}
+---
+
+<header class="w-full border-b border-art-deco-brass/30 relative z-10 bg-void-black">
+  <nav class="max-w-6xl mx-auto px-8 py-6">
+    <ul class="flex justify-center gap-6 md:gap-10">
+      {navItems.map(({ href, label }) => (
+        <li>
+          <a
+            href={href}
+            class:list={[
+              'group relative font-sans uppercase font-light text-xs md:text-sm tracking-widest transition-colors whitespace-nowrap',
+              isActive(href)
+                ? 'text-art-deco-brass'
+                : 'text-stardust/70 hover:text-stardust',
+            ]}
+            aria-current={isActive(href) ? 'page' : undefined}
+          >
+            {label}
+            <!-- Active indicator -->
+            {isActive(href) && (
+              <span class="absolute -bottom-2 left-0 right-0 flex flex-col items-center">
+                <span class="w-1 h-1 bg-art-deco-brass rotate-45" />
+              </span>
+            )}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+</header>

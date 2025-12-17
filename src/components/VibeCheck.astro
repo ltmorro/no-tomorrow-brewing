@@ -1,0 +1,26 @@
+---
+interface Props {
+  spotifyId: string;
+  title?: string;
+}
+
+const { spotifyId, title } = Astro.props;
+---
+
+<div class="vibe-check group">
+  {title && (
+    <h4 class="font-sans uppercase font-light text-sm tracking-widest text-stardust/50 mb-2">
+      Sonic Terroir
+    </h4>
+  )}
+  <div class="grayscale transition-all duration-500 group-hover:grayscale-0">
+    <iframe
+      src={`https://open.spotify.com/embed/album/${spotifyId}?utm_source=generator&theme=0`}
+      width="100%"
+      height="152"
+      frameborder="0"
+      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+      loading="lazy"
+    ></iframe>
+  </div>
+</div>

@@ -1,0 +1,340 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-void-black text-stardust;
+  }
+
+  /* On-brand text selection */
+  ::selection {
+    background-color: #D4AF37;
+    color: #0D0D0D;
+  }
+
+  /* Subtle brass glow for headings */
+  h1, h2, h3 {
+    text-shadow: 0 0 30px rgba(212, 175, 55, 0.15);
+  }
+
+  /* Focus states for accessibility */
+  :focus-visible {
+    outline: 1px solid #D4AF37;
+    outline-offset: 2px;
+  }
+}
+
+/* View transition animations */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slide-from-right {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-to-left {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(-20px); opacity: 0; }
+}
+
+::view-transition-old(root) {
+  animation: 150ms ease-out fade-out;
+}
+
+::view-transition-new(root) {
+  animation: 150ms ease-in fade-in;
+}
+
+/* Subtle vignette overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.4) 100%);
+  z-index: 9999;
+}
+
+/* Art deco geometric accents */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes blink {
+  0%, 90%, 100% { opacity: 1; }
+  95% { opacity: 0; }
+}
+
+.art-deco-line {
+  background: linear-gradient(90deg, transparent, #D4AF37, transparent);
+  height: 1px;
+}
+
+.art-deco-line-vertical {
+  background: linear-gradient(180deg, transparent, #D4AF37 20%, #D4AF37 80%, transparent);
+  width: 1px;
+}
+
+.brass-glow {
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.2), 0 0 40px rgba(212, 175, 55, 0.1);
+}
+
+.copper-glow {
+  box-shadow: 0 0 20px rgba(75, 127, 120, 0.3);
+}
+
+/* Fermentation bubble animation */
+@keyframes bubble-rise {
+  0% {
+    transform: translateY(100%) scale(0.5);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-100%) scale(1);
+    opacity: 0;
+  }
+}
+
+.bubble {
+  animation: bubble-rise var(--duration, 4s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* Stagger animation for cards */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+/* Scan line effect for techy feel */
+.scan-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(212, 175, 55, 0.03) 2px,
+    rgba(212, 175, 55, 0.03) 4px
+  );
+  pointer-events: none;
+}
+
+/* Film grain/noise overlay for lo-fi aesthetic */
+.noise-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* Liquid wave animation for progress bar */
+@keyframes liquid-wave-shine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+/* Wave motion using SVG pattern that scrolls horizontally */
+@keyframes liquid-surface-scroll {
+  0% {
+    background-position-x: 0;
+  }
+  100% {
+    background-position-x: 40px;
+  }
+}
+
+@keyframes liquid-surface-scroll-reverse {
+  0% {
+    background-position-x: 0;
+  }
+  100% {
+    background-position-x: -30px;
+  }
+}
+
+.liquid-fill {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Primary wave at top of liquid - using gradient to simulate wave */
+.liquid-fill::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 6'%3E%3Cpath d='M0 3 Q 5 0, 10 3 T 20 3 T 30 3 T 40 3 L 40 6 L 0 6 Z' fill='%23D4AF37'/%3E%3C/svg%3E");
+  background-size: 40px 6px;
+  background-repeat: repeat-x;
+  animation: liquid-surface-scroll 1s linear infinite;
+  z-index: 3;
+}
+
+/* Secondary wave layer for depth effect */
+.liquid-fill::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 5'%3E%3Cpath d='M0 2.5 Q 3.75 0.5, 7.5 2.5 T 15 2.5 T 22.5 2.5 T 30 2.5 L 30 5 L 0 5 Z' fill='%234B7F78' opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 30px 5px;
+  background-repeat: repeat-x;
+  animation: liquid-surface-scroll-reverse 1.5s linear infinite;
+  z-index: 2;
+}
+
+/* Shimmer highlight that moves across the liquid */
+.liquid-fill .liquid-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 45%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.08) 55%,
+    transparent 100%
+  );
+  animation: liquid-wave-shine 3s ease-in-out infinite;
+  z-index: 1;
+}
+
+/* Text scramble effect for telemetry numbers */
+@keyframes scramble-flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+.telemetry-value {
+  animation: scramble-flicker 0.1s ease-in-out;
+}
+
+.telemetry-value[data-scrambling="true"] {
+  animation: scramble-flicker 0.05s ease-in-out infinite;
+}
+
+/* Print styles */
+@media print {
+  /* Reset background for printing */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  body::before {
+    display: none !important;
+  }
+
+  /* Hide non-essential elements */
+  header,
+  .scan-overlay,
+  button,
+  iframe,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Reset colors for readability */
+  * {
+    color: black !important;
+    background: white !important;
+    border-color: #ccc !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Keep brass accents visible */
+  .text-art-deco-brass,
+  .text-oxidized-copper {
+    color: #333 !important;
+  }
+
+  /* Card layout for print */
+  article {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border: 1px solid #ccc !important;
+    margin-bottom: 1rem;
+    padding: 1rem !important;
+  }
+
+  /* Grid adjustments for print */
+  .grid {
+    display: block !important;
+  }
+
+  .grid > * {
+    margin-bottom: 1rem;
+  }
+
+  /* Clean up animations */
+  .animate-fade-up,
+  .animate-pulse,
+  .animate-bounce {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  /* Page margins */
+  @page {
+    margin: 1.5cm;
+  }
+}

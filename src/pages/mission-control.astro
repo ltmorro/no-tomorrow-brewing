@@ -1,0 +1,251 @@
+---
+import Layout from '../layouts/Layout.astro';
+import FermentationCard from '../components/FermentationCard.astro';
+import LiveGraph from '../components/LiveGraph';
+import { fetchBrews, fetchTiltData, getBrewsByStatus } from '../utils/googleSheets';
+import { format } from 'date-fns';
+
+const brews = await fetchBrews();
+const fermenting = getBrewsByStatus(brews, 'Fermenting');
+const onTap = getBrewsByStatus(brews, 'On Tap');
+
+// Fetch Tilt data for each fermenting brew
+const fermentingWithData = await Promise.all(
+  fermenting.map(async (brew) => {
+    const readings = brew.tilt_color
+      ? await fetchTiltData(brew.tilt_color)
+      : [];
+    return { brew, readings };
+  })
+);
+
+// System status calculations
+const activeSensors = fermenting.filter(b => b.tilt_color).length;
+const totalBatches = brews.length;
+const lastUpdate = fermentingWithData[0]?.readings[fermentingWithData[0].readings.length - 1];
+const lastUpdateTime = lastUpdate ? format(new Date(lastUpdate.timestamp), 'HH:mm:ss') : '--:--:--';
+
+// Calculate overall fermentation health
+const getSystemStatus = () => {
+  if (fermenting.length === 0) return { status: 'IDLE', color: 'stardust/50' };
+  const latestReading = fermentingWithData[0]?.readings[fermentingWithData[0].readings.length - 1];
+  if (!latestReading) return { status: 'NO SIGNAL', color: 'nebula-red' };
+  if (latestReading.temp > 75 || latestReading.temp < 60) return { status: 'TEMP ALERT', color: 'nebula-red' };
+  return { status: 'NOMINAL', color: 'oxidized-copper' };
+};
+
+const systemStatus = getSystemStatus();
+---
+
+<Layout title="Mission Control - No Tomorrow Brewing">
+  <main class="relative min-h-screen">
+
+    <!-- Scan line overlay for CRT effect -->
+    <div class="scan-overlay fixed inset-0 pointer-events-none z-50"></div>
+
+    <!-- HERO / STATUS BAR -->
+    <section class="relative border-b border-art-deco-brass/30 bg-deep-space">
+      <div class="max-w-6xl mx-auto px-8 py-12">
+
+        <!-- Header row -->
+        <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+          <div>
+            <div class="flex items-center gap-3 mb-2">
+              <div class="w-2 h-2 bg-oxidized-copper rounded-full animate-pulse"></div>
+              <span class="font-mono text-[10px] text-oxidized-copper uppercase tracking-widest">Live Telemetry</span>
+            </div>
+            <h1 class="font-sans uppercase font-semibold text-4xl md:text-5xl tracking-widest text-stardust">
+              Mission Control
+            </h1>
+          </div>
+
+          <!-- System time -->
+          <div class="font-mono text-right">
+            <p class="text-[10px] text-stardust/40 uppercase tracking-wider">System Time</p>
+            <p class="text-2xl text-art-deco-brass tabular-nums" id="system-clock">--:--:--</p>
+          </div>
+        </div>
+
+        <!-- Status panels -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <!-- System Status -->
+          <div class="border border-art-deco-brass/30 bg-void-black p-4">
+            <p class="font-mono text-[10px] text-stardust/40 uppercase tracking-wider mb-2">System Status</p>
+            <div class="flex items-center gap-2">
+              <div class={`w-2 h-2 rounded-full bg-${systemStatus.color} ${systemStatus.status === 'NOMINAL' ? 'animate-pulse' : ''}`}></div>
+              <span class={`font-mono text-lg text-${systemStatus.color} uppercase`}>{systemStatus.status}</span>
+            </div>
+          </div>
+
+          <!-- Active Fermentations -->
+          <div class="border border-art-deco-brass/30 bg-void-black p-4">
+            <p class="font-mono text-[10px] text-stardust/40 uppercase tracking-wider mb-2">Active Vessels</p>
+            <p class="font-mono text-3xl text-art-deco-brass">{fermenting.length}</p>
+          </div>
+
+          <!-- Sensors Online -->
+          <div class="border border-art-deco-brass/30 bg-void-black p-4">
+            <p class="font-mono text-[10px] text-stardust/40 uppercase tracking-wider mb-2">Sensors Online</p>
+            <p class="font-mono text-3xl text-oxidized-copper">{activeSensors}/{fermenting.length}</p>
+          </div>
+
+          <!-- Last Update -->
+          <div class="border border-art-deco-brass/30 bg-void-black p-4">
+            <p class="font-mono text-[10px] text-stardust/40 uppercase tracking-wider mb-2">Last Telemetry</p>
+            <p class="font-mono text-xl text-stardust tabular-nums">{lastUpdateTime}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick stats ticker -->
+    <div class="border-b border-art-deco-brass/20 bg-void-black/50 py-3 overflow-hidden">
+      <div class="flex items-center justify-center gap-8 font-mono text-xs">
+        <span class="text-stardust/40">BATCHES: <span class="text-art-deco-brass">{totalBatches}</span></span>
+        <span class="text-stardust/20">|</span>
+        <span class="text-stardust/40">ON TAP: <span class="text-oxidized-copper">{onTap.length}</span></span>
+        <span class="text-stardust/20">|</span>
+        <span class="text-stardust/40">FERMENTING: <span class="text-art-deco-brass">{fermenting.length}</span></span>
+        <span class="text-stardust/20">|</span>
+        <span class="text-stardust/40">UPTIME: <span class="text-oxidized-copper">99.7%</span></span>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <section class="max-w-6xl mx-auto px-8 py-12">
+
+      {fermentingWithData.length > 0 ? (
+        <div class="space-y-16">
+          {fermentingWithData.map(({ brew, readings }, index) => (
+            <div class="space-y-6">
+              <!-- Vessel header -->
+              <div class="flex items-center gap-4">
+                <div class="flex items-center justify-center w-12 h-12 border border-oxidized-copper/50 bg-void-black">
+                  <span class="font-mono text-xl text-oxidized-copper">{String(index + 1).padStart(2, '0')}</span>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center gap-3">
+                    <h2 class="font-sans uppercase font-semibold text-2xl tracking-widest text-stardust">
+                      {brew.name}
+                    </h2>
+                    {brew.tilt_color && (
+                      <span class="font-mono text-[10px] px-2 py-1 border border-oxidized-copper/50 text-oxidized-copper uppercase tracking-wider">
+                        {brew.tilt_color} Tilt
+                      </span>
+                    )}
+                  </div>
+                  <p class="font-mono text-sm text-stardust/50">{brew.style}</p>
+                </div>
+              </div>
+
+              <!-- Fermentation data card -->
+              <FermentationCard brew={brew} readings={readings} />
+
+              <!-- Live graph -->
+              {readings.length > 0 && (
+                <div class="border border-art-deco-brass/20 bg-deep-space p-6">
+                  <div class="flex items-center gap-2 mb-4">
+                    <div class="w-1.5 h-1.5 bg-oxidized-copper rounded-full animate-pulse"></div>
+                    <span class="font-mono text-[10px] text-stardust/40 uppercase tracking-wider">Live Telemetry Feed</span>
+                  </div>
+                  <LiveGraph
+                    readings={readings}
+                    brewName={brew.name}
+                    client:only="react"
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <!-- Idle state -->
+        <div class="flex flex-col items-center justify-center py-24">
+          <div class="relative">
+            <!-- Pulsing ring -->
+            <div class="absolute inset-0 border border-stardust/10 rounded-full animate-ping"></div>
+            <div class="w-32 h-32 border border-stardust/20 rounded-full flex items-center justify-center">
+              <div class="w-16 h-16 border border-stardust/30 rounded-full flex items-center justify-center">
+                <div class="w-4 h-4 bg-stardust/20 rounded-full"></div>
+              </div>
+            </div>
+          </div>
+          <h2 class="font-sans uppercase font-light text-2xl tracking-widest text-stardust/40 mt-8">
+            All Systems Idle
+          </h2>
+          <p class="font-mono text-sm text-stardust/30 mt-2 max-w-sm text-center">
+            No active fermentations. Awaiting next brew day to commence operations.
+          </p>
+        </div>
+      )}
+    </section>
+
+    <!-- TELEMETRY LEGEND -->
+    <section class="border-t border-art-deco-brass/20 bg-deep-space/50">
+      <div class="max-w-6xl mx-auto px-8 py-12">
+        <div class="flex items-center gap-4 mb-8">
+          <div class="h-px flex-1 art-deco-line"></div>
+          <span class="font-mono text-[10px] text-stardust/40 uppercase tracking-widest">Telemetry Reference</span>
+          <div class="h-px flex-1 art-deco-line"></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="border border-art-deco-brass/20 bg-void-black p-6 group hover:border-oxidized-copper/50 transition-colors">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="font-mono text-3xl text-oxidized-copper">SG</span>
+              <div class="h-px flex-1 bg-stardust/10"></div>
+            </div>
+            <p class="font-sans uppercase font-light text-xs tracking-widest text-stardust/50 mb-2">
+              Specific Gravity
+            </p>
+            <p class="font-mono text-xs text-stardust/40 leading-relaxed">
+              Density of liquid relative to water (1.000). Drops as yeast consumes fermentable sugars,
+              converting them to alcohol and CO₂.
+            </p>
+          </div>
+
+          <div class="border border-art-deco-brass/20 bg-void-black p-6 group hover:border-art-deco-brass/50 transition-colors">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="font-mono text-3xl text-art-deco-brass">°F</span>
+              <div class="h-px flex-1 bg-stardust/10"></div>
+            </div>
+            <p class="font-sans uppercase font-light text-xs tracking-widest text-stardust/50 mb-2">
+              Temperature
+            </p>
+            <p class="font-mono text-xs text-stardust/40 leading-relaxed">
+              Fermentation temperature directly affects yeast behavior. Higher temps produce more esters;
+              lower temps yield cleaner profiles.
+            </p>
+          </div>
+
+          <div class="border border-art-deco-brass/20 bg-void-black p-6 group hover:border-stardust/30 transition-colors">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="font-mono text-3xl text-stardust">%</span>
+              <div class="h-px flex-1 bg-stardust/10"></div>
+            </div>
+            <p class="font-sans uppercase font-light text-xs tracking-widest text-stardust/50 mb-2">
+              Attenuation
+            </p>
+            <p class="font-mono text-xs text-stardust/40 leading-relaxed">
+              Percentage of available sugars converted. Higher attenuation means drier beer;
+              lower means more residual sweetness.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Live clock script -->
+  <script>
+    function updateClock() {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('en-US', { hour12: false });
+      const clockEl = document.getElementById('system-clock');
+      if (clockEl) clockEl.textContent = timeString;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+  </script>
+</Layout>

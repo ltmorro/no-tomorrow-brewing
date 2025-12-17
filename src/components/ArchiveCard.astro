@@ -1,0 +1,100 @@
+---
+import { format } from 'date-fns';
+import type { Brew } from '../types/brew';
+
+interface Props {
+  brew: Brew;
+  index?: number;
+}
+
+const { brew, index = 0 } = Astro.props;
+const brewDate = new Date(brew.brew_date);
+const formattedDate = format(brewDate, 'MMM d, yyyy');
+const yearBrewed = format(brewDate, 'yyyy');
+const attenuation = brew.og > 0 ? Math.round(((brew.og - brew.fg) / (brew.og - 1)) * 100) : 0;
+
+// Calculate color intensity based on OG (darker beers tend to have higher OG)
+const getColorClass = () => {
+  if (brew.og >= 1.080) return 'from-amber-900/20';
+  if (brew.og >= 1.060) return 'from-amber-800/15';
+  if (brew.og >= 1.045) return 'from-amber-700/10';
+  return 'from-amber-600/5';
+};
+---
+
+<article
+  class="group relative border border-art-deco-brass/30 bg-deep-space overflow-hidden transition-all duration-300 hover:border-art-deco-brass hover:brass-glow animate-fade-up h-full flex flex-col"
+  style={`animation-delay: ${index * 75}ms`}
+>
+  <!-- Vintage paper texture gradient -->
+  <div class={`absolute inset-0 bg-gradient-to-br ${getColorClass()} to-transparent pointer-events-none`}></div>
+
+  <!-- Batch number stamp -->
+  <div class="absolute -right-4 -top-4 w-24 h-24 border-2 border-art-deco-brass/10 rounded-full flex items-center justify-center rotate-12 opacity-30 group-hover:opacity-50 transition-opacity">
+    <span class="font-mono text-xs text-art-deco-brass">{brew.id}</span>
+  </div>
+
+  <!-- Card content -->
+  <div class="relative p-6 flex flex-col flex-1">
+    <!-- Header -->
+    <div class="mb-4">
+      <div class="flex items-start justify-between gap-4 mb-1">
+        <h3 class="font-sans uppercase font-semibold text-lg tracking-widest text-stardust group-hover:text-art-deco-brass transition-colors leading-tight line-clamp-2 min-h-[2.5rem]">
+          {brew.name}
+        </h3>
+        <span class="font-mono text-xl text-art-deco-brass font-bold shrink-0">{brew.abv}%</span>
+      </div>
+      <p class="font-mono text-sm text-stardust/60">{brew.style}</p>
+    </div>
+
+    <!-- Divider -->
+    <div class="flex items-center gap-2 mb-4">
+      <div class="h-px flex-1 bg-art-deco-brass/20"></div>
+      <div class="w-1 h-1 bg-art-deco-brass/40 rotate-45"></div>
+      <div class="h-px flex-1 bg-art-deco-brass/20"></div>
+    </div>
+
+    <!-- Technical specs grid -->
+    <div class="grid grid-cols-2 gap-x-6 gap-y-2 mb-4 font-mono text-sm">
+      <div class="flex justify-between">
+        <span class="text-stardust/40">OG</span>
+        <span class="text-oxidized-copper tabular-nums">{brew.og.toFixed(3)}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-stardust/40">FG</span>
+        <span class="text-oxidized-copper tabular-nums">{brew.fg.toFixed(3)}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-stardust/40">IBU</span>
+        <span class="text-stardust tabular-nums">{brew.ibu}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-stardust/40">Atten.</span>
+        <span class="text-stardust tabular-nums">{attenuation}%</span>
+      </div>
+    </div>
+
+    <!-- Hops section -->
+    {brew.hops && (
+      <div class="mb-4 p-3 bg-void-black/50 border border-stardust/10">
+        <p class="font-mono text-[10px] text-art-deco-brass uppercase tracking-wider mb-1">Hop Bill</p>
+        <p class="font-mono text-xs text-stardust/70 leading-relaxed">{brew.hops}</p>
+      </div>
+    )}
+
+    <!-- Footer -->
+    <div class="flex items-center justify-between pt-4 border-t border-art-deco-brass/20 mt-auto">
+      <div class="flex items-center gap-2">
+        <div class="w-1.5 h-1.5 bg-art-deco-brass/50 rotate-45"></div>
+        <span class="font-mono text-xs text-stardust/40">{formattedDate}</span>
+      </div>
+      <span class="font-mono text-[10px] text-stardust/30 uppercase tracking-wider">Vol. {yearBrewed}</span>
+    </div>
+  </div>
+
+  <!-- Corner accents -->
+  <div class="absolute top-0 left-0 w-4 h-4 border-t border-l border-art-deco-brass/20"></div>
+  <div class="absolute top-0 right-0 w-4 h-4 border-t border-r border-art-deco-brass/20"></div>
+  <div class="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-art-deco-brass/20"></div>
+  <div class="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-art-deco-brass/20"></div>
+</article>

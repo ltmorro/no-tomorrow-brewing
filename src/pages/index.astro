@@ -1,0 +1,290 @@
+---
+import { Icon } from 'astro-icon/components';
+import Layout from '../layouts/Layout.astro';
+import TapCard from '../components/TapCard.astro';
+import TapModal from '../components/TapModal';
+import VibeCheck from '../components/VibeCheck';
+import { fetchBrews, fetchTiltData, fetchHistoricalTiltData, fetchFermentationDataBySheetId, getBrewsByStatus } from '../utils/googleSheets';
+
+const brews = await fetchBrews();
+const onTap = getBrewsByStatus(brews, 'On Tap');
+const kicked = getBrewsByStatus(brews, 'Kicked');
+const fermenting = getBrewsByStatus(brews, 'Fermenting');
+const tapList = [...onTap, ...kicked];
+
+// Fetch historical Tilt data for each tap beer
+const tapListWithData = await Promise.all(
+  tapList.map(async (brew) => {
+    let readings;
+    if (brew.tilt_sheet_id) {
+      readings = await fetchFermentationDataBySheetId(brew.tilt_sheet_id);
+    } else {
+      readings = await fetchHistoricalTiltData(brew.name);
+    }
+    return { brew, readings };
+  })
+);
+
+// Get latest tilt reading for fermenting beer
+const tiltData = await fetchTiltData();
+const latestReading = tiltData.length > 0 ? tiltData[tiltData.length - 1] : null;
+const fermentingBrew = fermenting.length > 0 ? fermenting[0] : null;
+
+// Calculate attenuation progress if we have data
+const getAttenuation = () => {
+  if (!fermentingBrew || !latestReading) return 0;
+  const og = fermentingBrew.og;
+  const fg = fermentingBrew.fg;
+  const currentSg = latestReading.sg;
+  if (!og || !fg) return 0;
+  const targetDrop = og - fg;
+  const actualDrop = og - currentSg;
+  return Math.min(100, Math.round((actualDrop / targetDrop) * 100));
+};
+
+// Stats
+const totalBatches = brews.length;
+const avgAbv = (brews.reduce((sum, b) => sum + b.abv, 0) / brews.length).toFixed(1);
+
+// Get a beer with spotify for the vibe section
+const vibeableBeer = onTap.find(b => b.spotify_id) || brews.find(b => b.spotify_id);
+---
+
+<Layout title="No Tomorrow Brewing Co.">
+  <main class="relative">
+
+    <!-- HERO SECTION -->
+    <section class="relative min-h-[80vh] flex flex-col items-center justify-center px-8 py-20 overflow-hidden">
+
+      <!-- Art deco geometric background -->
+      <!-- <div class="absolute inset-0 pointer-events-none"> -->
+        <!-- Radial lines emanating from center -->
+        <!-- <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150vw] h-[150vw]">
+          {[...Array(12)].map((_, i) => (
+            <div
+              class="absolute top-1/2 left-1/2 w-full h-px art-deco-line origin-left"
+              style={`transform: rotate(${i * 30}deg); opacity: ${0.1 + (i % 3) * 0.05}`}
+            ></div>
+          ))}
+        </div> -->
+        <!-- Concentric circles -->
+        <!-- <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div class="w-[300px] h-[300px] border border-art-deco-brass/10 rounded-full"></div>
+        </div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div class="w-[500px] h-[500px] border border-art-deco-brass/5 rounded-full"></div>
+        </div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div class="w-[700px] h-[700px] border border-art-deco-brass/[0.02] rounded-full"></div>
+        </div>
+      </div> -->
+
+      <!-- Logo and title -->
+      <div class="relative z-10 flex flex-col items-center gap-8">
+        <div class="relative group">
+          <Icon
+            name="no-tomorrow-logo"
+            class="w-[200px] h-[200px] relative z-10 transition-all duration-300 [&_path]:transition-all [&_path]:duration-300 group-hover:[&_#path0]:fill-art-deco-brass group-hover:[&_#path2]:fill-art-deco-brass"
+            aria-label="No Tomorrow Brewing Logo"
+          />
+          <!-- Glow effect behind logo -->
+          <!-- <div class="absolute inset-0 blur-3xl bg-art-deco-brass/10 scale-150"></div> -->
+        </div>
+
+        <div class="text-center">
+          <h1 class="font-sans uppercase font-semibold text-3xl sm:text-5xl md:text-6xl tracking-wider sm:tracking-widest text-stardust">
+            No Tomorrow
+          </h1>
+          <p class="font-sans uppercase font-light text-lg sm:text-xl md:text-2xl tracking-wider sm:tracking-widest text-art-deco-brass mt-2">
+            Brewing Co.
+          </p>
+        </div>
+
+        <!-- Tagline -->
+        <p class="font-mono text-stardust/60 text-center max-w-md text-sm leading-relaxed">
+          Small-batch. Experimental. Brewed like there's no tomorrow.
+        </p>
+
+        <!-- Stats bar -->
+        <div class="flex items-center gap-8 mt-4">
+          <div class="text-center">
+            <span class="font-mono text-3xl text-art-deco-brass font-bold">{totalBatches}</span>
+            <p class="font-mono text-[10px] text-stardust/40 uppercase tracking-wider mt-1">Batches</p>
+          </div>
+          <div class="w-px h-8 bg-stardust/20"></div>
+          <div class="text-center">
+            <span class="font-mono text-3xl text-art-deco-brass font-bold">{onTap.length}</span>
+            <p class="font-mono text-[10px] text-stardust/40 uppercase tracking-wider mt-1">On Tap</p>
+          </div>
+          <div class="w-px h-8 bg-stardust/20"></div>
+          <div class="text-center">
+            <span class="font-mono text-3xl text-art-deco-brass font-bold">{avgAbv}%</span>
+            <p class="font-mono text-[10px] text-stardust/40 uppercase tracking-wider mt-1">Avg ABV</p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- CURRENTLY FERMENTING TEASER -->
+    {fermentingBrew && (
+      <section class="relative border-y border-art-deco-brass/20 bg-deep-space/50">
+        <div class="max-w-5xl mx-auto px-8 py-12">
+          <div class="flex flex-col md:flex-row items-center justify-between gap-8">
+
+            <!-- Left: Label -->
+            <div class="flex items-center gap-4">
+              <div class="relative">
+                <!-- Animated bubbles -->
+                <div class="absolute inset-0 overflow-hidden w-12 h-12">
+                  <div class="bubble absolute w-1 h-1 bg-oxidized-copper/60 rounded-full left-2" style="--delay: 0s; --duration: 3s;"></div>
+                  <div class="bubble absolute w-1.5 h-1.5 bg-oxidized-copper/40 rounded-full left-5" style="--delay: 1s; --duration: 4s;"></div>
+                  <div class="bubble absolute w-1 h-1 bg-oxidized-copper/50 rounded-full left-8" style="--delay: 2s; --duration: 3.5s;"></div>
+                </div>
+                <div class="w-12 h-12 border border-oxidized-copper/50 flex items-center justify-center">
+                  <div class="w-3 h-3 bg-oxidized-copper rounded-full animate-pulse"></div>
+                </div>
+              </div>
+              <div>
+                <span class="font-mono text-[10px] text-oxidized-copper uppercase tracking-widest">Currently Fermenting</span>
+                <h3 class="font-sans uppercase font-semibold text-xl tracking-widest text-stardust">
+                  {fermentingBrew.name}
+                </h3>
+                <p class="font-mono text-xs text-stardust/50">{fermentingBrew.style}</p>
+              </div>
+            </div>
+
+            <!-- Right: Live stats -->
+            {latestReading && (
+              <div class="flex items-center gap-6">
+                <div class="text-center">
+                  <span class="font-mono text-2xl text-oxidized-copper">{latestReading.sg.toFixed(3)}</span>
+                  <p class="font-mono text-[10px] text-stardust/40 uppercase">Current SG</p>
+                </div>
+                <div class="text-center">
+                  <span class="font-mono text-2xl text-stardust">{latestReading.temp.toFixed(1)}°</span>
+                  <p class="font-mono text-[10px] text-stardust/40 uppercase">Temp °F</p>
+                </div>
+                <div class="text-center">
+                  <div class="flex items-center gap-2">
+                    <div class="w-24 h-2 bg-void-black border border-stardust/20 overflow-hidden">
+                      <div
+                        class="h-full bg-gradient-to-r from-oxidized-copper to-art-deco-brass transition-all duration-1000"
+                        style={`width: ${getAttenuation()}%`}
+                      ></div>
+                    </div>
+                    <span class="font-mono text-sm text-art-deco-brass">{getAttenuation()}%</span>
+                  </div>
+                  <p class="font-mono text-[10px] text-stardust/40 uppercase mt-1">Attenuation</p>
+                </div>
+              </div>
+            )}
+
+            <!-- Link to Mission Control -->
+            <a
+              href="/mission-control"
+              class="group flex items-center gap-2 font-mono text-xs text-stardust/50 hover:text-art-deco-brass transition-colors"
+            >
+              <span class="uppercase tracking-wider">Mission Control</span>
+              <span class="transform group-hover:translate-x-1 transition-transform">→</span>
+            </a>
+          </div>
+        </div>
+      </section>
+    )}
+
+    <!-- DIVIDER -->
+    <div class="flex items-center justify-center py-16">
+      <div class="flex items-center gap-4">
+        <div class="w-16 h-px art-deco-line"></div>
+        <div class="w-2 h-2 border border-art-deco-brass rotate-45"></div>
+        <div class="w-16 h-px art-deco-line"></div>
+      </div>
+    </div>
+
+    <!-- ON TAP SECTION -->
+    <section class="max-w-6xl mx-auto px-8 pb-20">
+      <div class="flex items-end justify-between mb-12">
+        <div>
+          <span class="font-mono text-[10px] text-stardust/40 uppercase tracking-widest">What's Pouring</span>
+          <h2 class="font-sans uppercase font-semibold text-4xl tracking-widest text-art-deco-brass mt-2">
+            On Tap
+          </h2>
+        </div>
+        <a
+          href="/library"
+          class="group flex items-center gap-2 font-mono text-xs text-stardust/50 hover:text-art-deco-brass transition-colors"
+        >
+          <span class="uppercase tracking-wider">View Archive</span>
+          <span class="transform group-hover:translate-x-1 transition-transform">→</span>
+        </a>
+      </div>
+
+      {tapListWithData.length > 0 ? (
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {tapListWithData.map(({ brew, readings }, index) => (
+            <div class="flex flex-col gap-3">
+              <TapCard brew={brew} index={index} />
+              <TapModal brew={brew} readings={readings} client:load />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div class="text-center py-20 border border-stardust/10">
+          <p class="font-mono text-stardust/50">
+            Kegs are dry. Something's brewing.
+          </p>
+        </div>
+      )}
+    </section>
+
+    <!-- SONIC TERROIR / VIBE SECTION -->
+    {vibeableBeer?.spotify_id && (
+      <section class="border-t border-art-deco-brass/20 bg-deep-space/30">
+        <div class="max-w-4xl mx-auto px-8 py-16">
+          <div class="flex flex-col md:flex-row items-center gap-8">
+            <div class="flex-1">
+              <span class="font-mono text-[10px] text-stardust/40 uppercase tracking-widest">Sonic Terroir</span>
+              <h3 class="font-sans uppercase font-semibold text-2xl tracking-widest text-art-deco-brass mt-2 mb-4">
+                Brewery Vibes
+              </h3>
+              <p class="font-mono text-sm text-stardust/60 leading-relaxed">
+                Every batch has a soundtrack. This is what was spinning during the brew day
+                for <span class="text-stardust">{vibeableBeer.name}</span>.
+              </p>
+            </div>
+            <div class="flex-1 w-full">
+              <VibeCheck spotifyId={vibeableBeer.spotify_id} client:load />
+            </div>
+          </div>
+        </div>
+      </section>
+    )}
+
+    <!-- PHILOSOPHY / MANIFESTO -->
+    <section class="max-w-2xl mx-auto px-8 py-20 text-center">
+      <div class="flex items-center justify-center gap-4 mb-8">
+        <div class="w-8 h-px art-deco-line"></div>
+        <span class="font-mono text-[10px] text-stardust/40 uppercase tracking-widest">The Philosophy</span>
+        <div class="w-8 h-px art-deco-line"></div>
+      </div>
+
+      <blockquote class="font-sans text-2xl md:text-3xl text-stardust/90 leading-relaxed font-light">
+        "Brew every beer like it's your last."
+      </blockquote>
+
+      <p class="font-mono text-sm text-stardust/50 mt-8 leading-relaxed max-w-lg mx-auto">
+        No Tomorrow is a small-batch, experimental homebrewery. We blend time-honored techniques
+        with an urgent, modern aesthetic. No boardrooms. No focus groups. Just pure ingredients
+        and the relentless pursuit of the perfect pint.
+      </p>
+
+      <div class="mt-12 flex items-center justify-center gap-4">
+        <div class="w-1 h-1 bg-art-deco-brass rotate-45"></div>
+        <div class="w-1.5 h-1.5 bg-art-deco-brass rotate-45"></div>
+        <div class="w-1 h-1 bg-art-deco-brass rotate-45"></div>
+      </div>
+    </section>
+
+  </main>
+</Layout>

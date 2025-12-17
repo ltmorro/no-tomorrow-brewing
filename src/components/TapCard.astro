@@ -1,0 +1,130 @@
+---
+import { formatDistanceToNow, differenceInDays, parseISO } from 'date-fns';
+import type { Brew } from '../types/brew';
+
+interface Props {
+  brew: Brew;
+  index?: number;
+}
+
+const { brew, index = 0 } = Astro.props;
+const isKicked = brew.status === 'Kicked';
+
+// Calculate freshness - parse dates once
+const now = new Date();
+const brewDate = parseISO(brew.brew_date);
+const daysOld = differenceInDays(now, brewDate);
+const freshness = formatDistanceToNow(brewDate, { addSuffix: true });
+
+// Freshness label
+const getFreshnessLabel = () => {
+  if (daysOld <= 7) return 'PEAK FRESH';
+  if (daysOld <= 14) return 'DRINKING WELL';
+  if (daysOld <= 30) return 'MATURE';
+  return 'AGED';
+};
+
+// Fake scarcity for vibes (in production, this would come from actual keg levels)
+const getScarcityLevel = () => {
+  if (isKicked) return 0;
+  // Simulate based on age - older = less remaining
+  if (daysOld <= 3) return 95;
+  if (daysOld <= 7) return 75;
+  if (daysOld <= 14) return 50;
+  if (daysOld <= 21) return 25;
+  return 10;
+};
+
+const scarcity = getScarcityLevel();
+const isRunningLow = scarcity <= 25 && !isKicked;
+---
+
+<article
+  class:list={[
+    'group relative border bg-deep-space p-6 flex flex-col gap-4 transition-all duration-300 overflow-hidden animate-fade-up h-full',
+    isKicked
+      ? 'border-nebula-red/50 opacity-60'
+      : 'border-art-deco-brass/60 hover:border-art-deco-brass hover:brass-glow',
+  ]}
+  style={`animation-delay: ${index * 100}ms`}
+>
+  <!-- Batch number watermark -->
+  <span class="absolute -right-2 -top-2 font-mono text-6xl font-bold text-art-deco-brass/5 select-none">
+    {brew.id.split('-')[1]}
+  </span>
+
+  <!-- Header with name and ABV -->
+  <div class="flex justify-between items-start gap-4">
+    <div class="flex-1 min-w-0">
+      <span class="font-mono text-[10px] text-art-deco-brass/60 tracking-wider">
+        BATCH {brew.id}
+      </span>
+      <h3
+        class:list={[
+          'font-sans uppercase font-semibold text-lg tracking-widest leading-tight mt-1 line-clamp-2 min-h-[2.5rem]',
+          isKicked ? 'text-nebula-red line-through decoration-1' : 'text-stardust group-hover:text-art-deco-brass transition-colors',
+        ]}
+      >
+        {brew.name}
+      </h3>
+    </div>
+    <div class="text-right shrink-0">
+      <span class="font-mono text-xl text-art-deco-brass font-bold">{brew.abv}</span>
+      <span class="font-mono text-xs text-stardust/50">%</span>
+    </div>
+  </div>
+
+  <!-- Style -->
+  <p class="font-mono text-sm text-stardust/75">{brew.style}</p>
+
+  <!-- Stats row -->
+  <div class="flex gap-4 text-xs font-mono">
+    {brew.ibu > 0 && (
+      <span class="text-oxidized-copper">{brew.ibu} IBU</span>
+    )}
+    {brew.og && (
+      <span class="text-stardust/50">OG {brew.og.toFixed(3)}</span>
+    )}
+  </div>
+
+  <!-- Bottom section -->
+  <div class="mt-auto pt-4 border-t border-stardust/10">
+    {isKicked ? (
+      <div class="flex items-center gap-2">
+        <span class="inline-block w-2 h-2 bg-nebula-red rounded-full"></span>
+        <span class="font-mono text-xs text-nebula-red uppercase tracking-wider">Kicked</span>
+      </div>
+    ) : (
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class:list={[
+            'inline-block w-2 h-2 rounded-full',
+            isRunningLow ? 'bg-nebula-red animate-pulse' : 'bg-oxidized-copper'
+          ]}></span>
+          <span class:list={[
+            'font-mono text-[10px] uppercase tracking-wider',
+            isRunningLow ? 'text-nebula-red' : 'text-stardust/50'
+          ]}>
+            {isRunningLow ? 'Running Low' : getFreshnessLabel()}
+          </span>
+        </div>
+        <!-- Keg level indicator -->
+        <div class="flex items-center gap-2">
+          <div class="w-16 h-1 bg-stardust/10 overflow-hidden">
+            <div
+              class:list={[
+                'h-full transition-all duration-500',
+                isRunningLow ? 'bg-nebula-red' : 'bg-oxidized-copper'
+              ]}
+              style={`width: ${scarcity}%`}
+            ></div>
+          </div>
+          <span class="font-mono text-[10px] text-stardust/40">{scarcity}%</span>
+        </div>
+      </div>
+    )}
+  </div>
+
+  <!-- Corner accent -->
+  <div class="absolute bottom-0 right-0 w-8 h-8 border-b border-r border-art-deco-brass/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</article>
