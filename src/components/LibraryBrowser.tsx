@@ -1,20 +1,21 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
-import Highcharts from 'highcharts';
-import HighchartsReact from 'highcharts-react-official';
 import Barcode from 'react-barcode';
+import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
-import { useRef, useCallback } from 'react';
 import type { Brew, TiltReading } from '../types/brew';
-
-interface BrewWithData {
-  brew: Brew;
-  readings: TiltReading[];
-}
+import BeerModal from './BeerModal';
+import ShareModal from './ShareModal';
+import { calculateAttenuation } from '../utils/brewCalculations';
+import { generateBackground } from '../utils/generativeArt';
+import { fetchFermentationDataForBrew } from '../utils/googleSheets';
 
 interface Props {
-  brews: BrewWithData[];
+  brews: Brew[];
 }
+
+// Cache for fetched readings to avoid re-fetching on modal reopen
+type ReadingsCache = Record<string, { readings: TiltReading[]; loading: boolean }>;
 
 type SortOption = 'newest' | 'oldest' | 'abv-high' | 'abv-low' | 'attenuation' | 'og-high';
 
@@ -25,11 +26,38 @@ export default function LibraryBrowser({ brews }: Props) {
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [openModalId, setOpenModalId] = useState<string | null>(null);
   const [openLabelId, setOpenLabelId] = useState<string | null>(null);
+  const [openShareId, setOpenShareId] = useState<string | null>(null);
+
+  // Cache for lazily-loaded fermentation readings
+  const [readingsCache, setReadingsCache] = useState<ReadingsCache>({});
+
+  // Fetch fermentation data when a modal is opened
+  const handleOpenModal = useCallback(async (brew: Brew) => {
+    setOpenModalId(brew.id);
+
+    // Skip if already cached or currently loading
+    if (readingsCache[brew.id]) return;
+
+    // Mark as loading
+    setReadingsCache((prev) => ({
+      ...prev,
+      [brew.id]: { readings: [], loading: true },
+    }));
+
+    // Fetch the data
+    const readings = await fetchFermentationDataForBrew(brew);
+
+    // Cache the result
+    setReadingsCache((prev) => ({
+      ...prev,
+      [brew.id]: { readings, loading: false },
+    }));
+  }, [readingsCache]);
 
   // Extract unique styles for filter
   const uniqueStyles = useMemo(() => {
     const styles = new Map<string, number>();
-    brews.forEach(({ brew }) => {
+    brews.forEach((brew) => {
       const baseStyle = brew.style.split(' ').slice(-1)[0];
       styles.set(baseStyle, (styles.get(baseStyle) || 0) + 1);
     });
@@ -53,7 +81,7 @@ export default function LibraryBrowser({ brews }: Props) {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
-        ({ brew }) =>
+        (brew) =>
           brew.name.toLowerCase().includes(query) ||
           brew.style.toLowerCase().includes(query) ||
           brew.hops?.toLowerCase().includes(query) ||
@@ -63,7 +91,7 @@ export default function LibraryBrowser({ brews }: Props) {
 
     // Style filter
     if (selectedStyle) {
-      result = result.filter(({ brew }) =>
+      result = result.filter((brew) =>
         brew.style.toLowerCase().includes(selectedStyle.toLowerCase())
       );
     }
@@ -71,30 +99,28 @@ export default function LibraryBrowser({ brews }: Props) {
     // ABV range filter
     if (abvRange) {
       result = result.filter(
-        ({ brew }) => brew.abv >= abvRange[0] && brew.abv < abvRange[1]
+        (brew) => brew.abv >= abvRange[0] && brew.abv < abvRange[1]
       );
     }
 
     // Sort
     result.sort((a, b) => {
-      const brewA = a.brew;
-      const brewB = b.brew;
-      const attenuationA = brewA.og > 0 ? ((brewA.og - brewA.fg) / (brewA.og - 1)) * 100 : 0;
-      const attenuationB = brewB.og > 0 ? ((brewB.og - brewB.fg) / (brewB.og - 1)) * 100 : 0;
+      const attenuationA = calculateAttenuation(a.og, a.fg);
+      const attenuationB = calculateAttenuation(b.og, b.fg);
 
       switch (sortBy) {
         case 'newest':
-          return new Date(brewB.brew_date).getTime() - new Date(brewA.brew_date).getTime();
+          return new Date(b.brew_date).getTime() - new Date(a.brew_date).getTime();
         case 'oldest':
-          return new Date(brewA.brew_date).getTime() - new Date(brewB.brew_date).getTime();
+          return new Date(a.brew_date).getTime() - new Date(b.brew_date).getTime();
         case 'abv-high':
-          return brewB.abv - brewA.abv;
+          return b.abv - a.abv;
         case 'abv-low':
-          return brewA.abv - brewB.abv;
+          return a.abv - b.abv;
         case 'attenuation':
           return attenuationB - attenuationA;
         case 'og-high':
-          return brewB.og - brewA.og;
+          return b.og - a.og;
         default:
           return 0;
       }
@@ -105,11 +131,11 @@ export default function LibraryBrowser({ brews }: Props) {
 
   // Group by year for display
   const brewsByYear = useMemo(() => {
-    const groups: Record<string, BrewWithData[]> = {};
-    filteredBrews.forEach((item) => {
-      const year = format(new Date(item.brew.brew_date), 'yyyy');
+    const groups: Record<string, Brew[]> = {};
+    filteredBrews.forEach((brew) => {
+      const year = format(new Date(brew.brew_date), 'yyyy');
       if (!groups[year]) groups[year] = [];
-      groups[year].push(item);
+      groups[year].push(brew);
     });
     return groups;
   }, [filteredBrews]);
@@ -262,18 +288,22 @@ export default function LibraryBrowser({ brews }: Props) {
 
               {/* Cards grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {brewsByYear[year].map(({ brew, readings }, index) => (
+                {brewsByYear[year].map((brew, index) => (
                   <ArchiveCardWithActions
                     key={brew.id}
                     brew={brew}
-                    readings={readings}
+                    readings={readingsCache[brew.id]?.readings || []}
+                    isLoadingReadings={readingsCache[brew.id]?.loading || false}
                     index={index}
                     isModalOpen={openModalId === brew.id}
                     isLabelOpen={openLabelId === brew.id}
-                    onOpenModal={() => setOpenModalId(brew.id)}
+                    isShareOpen={openShareId === brew.id}
+                    onOpenModal={() => handleOpenModal(brew)}
                     onCloseModal={() => setOpenModalId(null)}
                     onOpenLabel={() => setOpenLabelId(brew.id)}
                     onCloseLabel={() => setOpenLabelId(null)}
+                    onOpenShare={() => setOpenShareId(brew.id)}
+                    onCloseShare={() => setOpenShareId(null)}
                   />
                 ))}
               </div>
@@ -304,33 +334,41 @@ export default function LibraryBrowser({ brews }: Props) {
   );
 }
 
-// Archive Card with integrated actions (Modal + Label)
+// Archive Card with integrated actions (Modal + Label + Share)
 interface CardProps {
   brew: Brew;
   readings: TiltReading[];
+  isLoadingReadings: boolean;
   index: number;
   isModalOpen: boolean;
   isLabelOpen: boolean;
+  isShareOpen: boolean;
   onOpenModal: () => void;
   onCloseModal: () => void;
   onOpenLabel: () => void;
   onCloseLabel: () => void;
+  onOpenShare: () => void;
+  onCloseShare: () => void;
 }
 
 function ArchiveCardWithActions({
   brew,
   readings,
+  isLoadingReadings,
   index,
   isModalOpen,
   isLabelOpen,
+  isShareOpen,
   onOpenModal,
   onCloseModal,
   onOpenLabel,
   onCloseLabel,
+  onOpenShare,
+  onCloseShare,
 }: CardProps) {
   const formattedDate = format(new Date(brew.brew_date), 'MMM d, yyyy');
   const yearBrewed = format(new Date(brew.brew_date), 'yyyy');
-  const attenuation = brew.og > 0 ? Math.round(((brew.og - brew.fg) / (brew.og - 1)) * 100) : 0;
+  const attenuation = calculateAttenuation(brew.og, brew.fg);
 
   const getColorClass = () => {
     if (brew.og >= 1.08) return 'from-amber-900/20';
@@ -339,11 +377,20 @@ function ArchiveCardWithActions({
     return 'from-amber-600/5';
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't open modal if clicking on action buttons
+    if ((e.target as HTMLElement).closest('.action-buttons')) {
+      return;
+    }
+    onOpenModal();
+  };
+
   return (
-    <div className="flex flex-col gap-3">
-      {/* Card */}
+    <div className="relative">
+      {/* Card - now clickable */}
       <article
-        className="group relative border border-art-deco-brass/30 bg-deep-space overflow-hidden transition-all duration-300 hover:border-art-deco-brass h-full flex flex-col"
+        onClick={handleCardClick}
+        className="group relative border border-art-deco-brass/30 bg-deep-space overflow-hidden transition-all duration-300 hover:border-art-deco-brass hover:brass-glow h-full flex flex-col cursor-pointer"
         style={{ animationDelay: `${index * 75}ms` }}
       >
         {/* Vintage paper texture gradient */}
@@ -408,15 +455,47 @@ function ArchiveCardWithActions({
             </div>
           )}
 
-          {/* Footer */}
+          {/* Footer with actions */}
           <div className="flex items-center justify-between pt-4 border-t border-art-deco-brass/20 mt-auto">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 bg-art-deco-brass/50 rotate-45" />
               <span className="font-mono text-xs text-stardust/40">{formattedDate}</span>
             </div>
-            <span className="font-mono text-[10px] text-stardust/30 uppercase tracking-wider">
-              Vol. {yearBrewed}
-            </span>
+            {/* Action buttons in footer */}
+            <div className="action-buttons flex items-center gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenShare();
+                }}
+                className="p-1.5 text-stardust/40 hover:text-art-deco-brass transition-colors"
+                title="Share this beer"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenLabel();
+                }}
+                className="font-mono text-[10px] px-2 py-1 border border-art-deco-brass/30 text-art-deco-brass/60 hover:border-art-deco-brass hover:text-art-deco-brass transition-colors uppercase tracking-wider"
+                title="Print label"
+              >
+                Label
+              </button>
+            </div>
           </div>
         </div>
 
@@ -427,27 +506,18 @@ function ArchiveCardWithActions({
         <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-art-deco-brass/20" />
       </article>
 
-      {/* Action buttons */}
-      <div className="flex gap-2">
-        <button
-          onClick={onOpenModal}
-          className="flex-1 font-mono text-xs px-3 py-2 border border-stardust/30 text-stardust/70 hover:border-art-deco-brass hover:text-art-deco-brass transition-colors flex items-center justify-center gap-2"
-        >
-          <span>View Details</span>
-          <span className="text-art-deco-brass">→</span>
-        </button>
-        <button
-          onClick={onOpenLabel}
-          className="font-mono text-xs px-3 py-2 border border-art-deco-brass/50 text-art-deco-brass/70 hover:border-art-deco-brass hover:text-art-deco-brass hover:bg-art-deco-brass/10 transition-colors"
-        >
-          Label
-        </button>
-      </div>
-
       {/* Modal */}
-      {isModalOpen && (
-        <BrewModal brew={brew} readings={readings} onClose={onCloseModal} />
-      )}
+      <BeerModal
+        brew={brew}
+        readings={readings}
+        isLoadingReadings={isLoadingReadings}
+        isOpen={isModalOpen}
+        onClose={onCloseModal}
+        showKegStatus={false}
+      />
+
+      {/* Share Modal */}
+      <ShareModal brew={brew} isOpen={isShareOpen} onClose={onCloseShare} />
 
       {/* Label Modal */}
       {isLabelOpen && <LabelModal brew={brew} onClose={onCloseLabel} />}
@@ -455,238 +525,15 @@ function ArchiveCardWithActions({
   );
 }
 
-// Brew Detail Modal (inlined from BrewArchiveModal)
-function BrewModal({
-  brew,
-  readings,
-  onClose,
-}: {
-  brew: Brew;
-  readings: TiltReading[];
-  onClose: () => void;
-}) {
-  const formattedDate = format(new Date(brew.brew_date), 'MMM d, yyyy');
-  const attenuation = brew.og > 0 ? Math.round(((brew.og - brew.fg) / (brew.og - 1)) * 100) : 0;
+// Label Modal with Generative Art Background
+const CANVAS_WIDTH = 256;
+const CANVAS_HEIGHT = 384;
+const EXPORT_SCALE = 3;
 
-  const sortedReadings = [...readings].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
-
-  const gravityData = sortedReadings.map((r) => [new Date(r.timestamp).getTime(), r.sg]);
-  const tempData = sortedReadings.map((r) => [new Date(r.timestamp).getTime(), r.temp]);
-
-  const firstReading = sortedReadings[0];
-  const lastReading = sortedReadings[sortedReadings.length - 1];
-  const fermentationDays =
-    firstReading && lastReading
-      ? Math.round(
-          (new Date(lastReading.timestamp).getTime() - new Date(firstReading.timestamp).getTime()) /
-            (1000 * 60 * 60 * 24)
-        )
-      : 0;
-
-  const chartOptions: Highcharts.Options = {
-    chart: { backgroundColor: '#161616', height: 300 },
-    title: { text: undefined },
-    credits: { enabled: false },
-    legend: {
-      itemStyle: { color: '#E8E6E1', fontWeight: '400' },
-      itemHoverStyle: { color: '#D4AF37' },
-    },
-    xAxis: {
-      type: 'datetime',
-      lineColor: '#D4AF37',
-      tickColor: '#D4AF37',
-      labels: { style: { color: '#E8E6E1', fontSize: '10px' } },
-      gridLineWidth: 0,
-    },
-    yAxis: [
-      {
-        title: { text: 'Gravity (SG)', style: { color: '#4B7F78' } },
-        labels: { format: '{value:.3f}', style: { color: '#4B7F78' } },
-        lineColor: '#4B7F78',
-        lineWidth: 1,
-        gridLineWidth: 0,
-      },
-      {
-        title: { text: 'Temp (°F)', style: { color: '#D4AF37' } },
-        labels: { format: '{value}°', style: { color: '#D4AF37' } },
-        opposite: true,
-        lineColor: '#D4AF37',
-        lineWidth: 1,
-        gridLineWidth: 0,
-      },
-    ],
-    tooltip: {
-      shared: true,
-      backgroundColor: '#0D0D0D',
-      borderColor: '#D4AF37',
-      borderWidth: 1,
-      style: { color: '#E8E6E1' },
-    },
-    series: [
-      {
-        name: 'Gravity',
-        type: 'line',
-        data: gravityData,
-        color: '#4B7F78',
-        yAxis: 0,
-        marker: { symbol: 'diamond', radius: 3 },
-      },
-      {
-        name: 'Temperature',
-        type: 'spline',
-        data: tempData,
-        color: '#D4AF37',
-        yAxis: 1,
-        marker: { enabled: false },
-      },
-    ],
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div className="absolute inset-0 bg-void-black/90 backdrop-blur-sm" />
-      <div
-        className="relative bg-deep-space border border-art-deco-brass w-full max-w-3xl max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="sticky top-0 bg-deep-space border-b border-art-deco-brass/25 p-6 flex justify-between items-start z-10">
-          <div>
-            <h2 className="font-sans uppercase font-semibold text-2xl tracking-widest text-art-deco-brass">
-              {brew.name}
-            </h2>
-            <p className="font-mono text-stardust/75 mt-1">{brew.style}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="font-mono text-stardust/50 hover:text-art-deco-brass transition-colors p-2"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="p-6 space-y-6">
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="border border-art-deco-brass/25 p-4 text-center">
-              <p className="font-mono text-2xl text-art-deco-brass">{brew.abv}%</p>
-              <p className="font-sans uppercase font-light text-xs tracking-widest text-stardust/50 mt-1">
-                ABV
-              </p>
-            </div>
-            <div className="border border-art-deco-brass/25 p-4 text-center">
-              <p className="font-mono text-2xl text-stardust">{brew.ibu}</p>
-              <p className="font-sans uppercase font-light text-xs tracking-widest text-stardust/50 mt-1">
-                IBU
-              </p>
-            </div>
-            <div className="border border-art-deco-brass/25 p-4 text-center">
-              <p className="font-mono text-2xl text-oxidized-copper">{brew.og.toFixed(3)}</p>
-              <p className="font-sans uppercase font-light text-xs tracking-widest text-stardust/50 mt-1">
-                OG
-              </p>
-            </div>
-            <div className="border border-art-deco-brass/25 p-4 text-center">
-              <p className="font-mono text-2xl text-oxidized-copper">{brew.fg.toFixed(3)}</p>
-              <p className="font-sans uppercase font-light text-xs tracking-widest text-stardust/50 mt-1">
-                FG
-              </p>
-            </div>
-          </div>
-
-          {/* Brew Details */}
-          <div className="grid grid-cols-2 gap-4 font-mono text-sm">
-            <div className="flex justify-between border-b border-art-deco-brass/25 pb-2">
-              <span className="text-stardust/50">Batch ID</span>
-              <span className="text-stardust">{brew.id}</span>
-            </div>
-            <div className="flex justify-between border-b border-art-deco-brass/25 pb-2">
-              <span className="text-stardust/50">Brew Date</span>
-              <span className="text-stardust">{formattedDate}</span>
-            </div>
-            <div className="flex justify-between border-b border-art-deco-brass/25 pb-2">
-              <span className="text-stardust/50">Attenuation</span>
-              <span className="text-oxidized-copper">{attenuation}%</span>
-            </div>
-            {fermentationDays > 0 && (
-              <div className="flex justify-between border-b border-art-deco-brass/25 pb-2">
-                <span className="text-stardust/50">Fermentation</span>
-                <span className="text-stardust">{fermentationDays} days</span>
-              </div>
-            )}
-          </div>
-
-          {brew.hops && (
-            <div className="border border-art-deco-brass/25 p-4">
-              <p className="font-sans uppercase font-light text-xs tracking-widest text-stardust/50 mb-2">
-                Hop Profile
-              </p>
-              <p className="font-mono text-stardust">{brew.hops}</p>
-            </div>
-          )}
-
-          {/* Spotify Embed */}
-          {brew.spotify_id && (
-            <div className="border border-art-deco-brass/25">
-              <div className="border-b border-art-deco-brass/25 px-4 py-3">
-                <h4 className="font-sans uppercase font-light text-sm tracking-widest text-stardust/75">
-                  Sonic Terroir
-                </h4>
-              </div>
-              <div className="p-4">
-                <iframe
-                  src={`https://open.spotify.com/embed/album/${brew.spotify_id}?utm_source=generator&theme=0`}
-                  width="100%"
-                  height="152"
-                  frameBorder="0"
-                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                  loading="lazy"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Fermentation Chart */}
-          {readings.length > 0 ? (
-            <div className="border border-art-deco-brass">
-              <div className="border-b border-art-deco-brass/25 px-4 py-3">
-                <h4 className="font-sans uppercase font-light text-sm tracking-widest text-stardust/75">
-                  Fermentation History
-                </h4>
-              </div>
-              <div className="p-4">
-                <HighchartsReact highcharts={Highcharts} options={chartOptions} />
-              </div>
-              <div className="border-t border-art-deco-brass/25 px-4 py-2 flex justify-between">
-                <span className="font-mono text-xs text-stardust/50">{readings.length} readings</span>
-                <span className="font-mono text-xs text-stardust/50">
-                  {fermentationDays > 0 ? `${fermentationDays} day fermentation` : 'Historical data'}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="border border-art-deco-brass/25 p-8 text-center">
-              <p className="font-mono text-stardust/50 text-sm">
-                No fermentation telemetry recorded for this batch.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Label Modal (inlined from LabelMaker)
 function LabelModal({ brew, onClose }: { brew: Brew; onClose: () => void }) {
   const [isGenerating, setIsGenerating] = useState(false);
-  const labelRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -697,25 +544,59 @@ function LabelModal({ brew, onClose }: { brew: Brew; onClose: () => void }) {
     });
   };
 
+  // Generate background art when modal opens
+  useEffect(() => {
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        generateBackground(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, brew);
+      }
+    }
+  }, [brew]);
+
   const downloadLabel = useCallback(async () => {
-    if (!labelRef.current) return;
+    if (!canvasRef.current || !overlayRef.current) return;
     setIsGenerating(true);
     try {
-      const dataUrl = await toPng(labelRef.current, {
+      // Create high-res export canvas
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = CANVAS_WIDTH * EXPORT_SCALE;
+      exportCanvas.height = CANVAS_HEIGHT * EXPORT_SCALE;
+      const exportCtx = exportCanvas.getContext('2d');
+
+      if (!exportCtx) throw new Error('Failed to get export canvas context');
+
+      // Scale and draw the generative background
+      exportCtx.scale(EXPORT_SCALE, EXPORT_SCALE);
+      generateBackground(exportCtx, CANVAS_WIDTH, CANVAS_HEIGHT, brew);
+      exportCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+      // Draw text overlay
+      const overlayDataUrl = await toPng(overlayRef.current, {
         quality: 1,
-        pixelRatio: 3,
-        backgroundColor: '#0D0D0D',
+        pixelRatio: EXPORT_SCALE,
+        backgroundColor: 'transparent',
       });
+
+      const overlayImg = new Image();
+      await new Promise<void>((resolve, reject) => {
+        overlayImg.onload = () => resolve();
+        overlayImg.onerror = reject;
+        overlayImg.src = overlayDataUrl;
+      });
+
+      exportCtx.drawImage(overlayImg, 0, 0);
+
       const link = document.createElement('a');
       link.download = `${brew.id}-label.png`;
-      link.href = dataUrl;
+      link.href = exportCanvas.toDataURL('image/png');
       link.click();
     } catch (err) {
       console.error('Failed to generate label:', err);
     } finally {
       setIsGenerating(false);
     }
-  }, [brew.id]);
+  }, [brew]);
 
   return (
     <div
@@ -742,64 +623,108 @@ function LabelModal({ brew, onClose }: { brew: Brew; onClose: () => void }) {
         {/* Label Preview */}
         <div className="p-6 flex justify-center">
           <div
-            ref={labelRef}
-            className="bg-void-black border-2 border-art-deco-brass p-6 w-64"
-            style={{ fontFamily: '"Space Mono", monospace' }}
+            className="relative border-2 border-art-deco-brass"
+            style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }}
           >
-            <div className="text-center mb-4 pb-4 border-b border-art-deco-brass/50">
-              <p
-                className="text-art-deco-brass text-xs tracking-[0.3em] uppercase"
-                style={{ fontFamily: '"Josefin Sans", sans-serif' }}
-              >
-                No Tomorrow
+            {/* Generative Background Canvas */}
+            <canvas
+              ref={canvasRef}
+              width={CANVAS_WIDTH}
+              height={CANVAS_HEIGHT}
+              className="absolute inset-0"
+            />
+
+            {/* Text Overlay */}
+            <div
+              ref={overlayRef}
+              className="absolute inset-0 flex flex-col p-4"
+              style={{ fontFamily: '"Space Mono", monospace' }}
+            >
+              {/* Brewery Name */}
+              <div className="text-center mb-3 pb-3 border-b border-art-deco-brass/50 bg-void-black/60 -mx-4 -mt-4 px-4 pt-4">
+                <p
+                  className="text-art-deco-brass text-xs tracking-[0.3em] uppercase"
+                  style={{ fontFamily: '"Josefin Sans", sans-serif' }}
+                >
+                  No Tomorrow
+                </p>
+                <p
+                  className="text-art-deco-brass text-xs tracking-[0.2em] uppercase"
+                  style={{ fontFamily: '"Josefin Sans", sans-serif' }}
+                >
+                  Brewing Co.
+                </p>
+              </div>
+
+              {/* Beer Name */}
+              <div className="text-center mb-3 bg-void-black/70 py-2 -mx-4 px-4">
+                <h4
+                  className="text-stardust text-base uppercase tracking-widest leading-tight"
+                  style={{ fontFamily: '"Josefin Sans", sans-serif' }}
+                >
+                  {brew.name}
+                </h4>
+                <p className="text-stardust/60 text-xs mt-1">{brew.style}</p>
+              </div>
+
+              {/* Stats Grid */}
+              <div className="grid grid-cols-2 gap-2 mb-3 text-center">
+                <div className="border border-art-deco-brass/40 p-2 bg-void-black/70">
+                  <p className="text-stardust/60 text-[9px] uppercase">ABV</p>
+                  <p className="text-art-deco-brass text-sm font-bold">{brew.abv}%</p>
+                </div>
+                <div className="border border-art-deco-brass/40 p-2 bg-void-black/70">
+                  <p className="text-stardust/60 text-[9px] uppercase">IBU</p>
+                  <p className="text-oxidized-copper text-sm font-bold">{brew.ibu}</p>
+                </div>
+              </div>
+
+              {/* Hops */}
+              {brew.hops && (
+                <div className="text-center mb-2 py-2 border-t border-b border-art-deco-brass/30 bg-void-black/60 -mx-4 px-4">
+                  <p className="text-stardust/60 text-[9px] uppercase mb-1">Hops</p>
+                  <p className="text-stardust text-[10px]">{brew.hops}</p>
+                </div>
+              )}
+
+              {/* Brew Date */}
+              <div className="text-center mb-2">
+                <p className="text-stardust/60 text-[9px] uppercase">Brewed</p>
+                <p className="text-stardust text-xs">{formatDate(brew.brew_date)}</p>
+              </div>
+
+              {/* Spacer */}
+              <div className="flex-grow" />
+
+              {/* QR Code */}
+              <div className="flex justify-center mb-2">
+                <div className="p-1.5 bg-stardust">
+                  <QRCodeSVG
+                    value={`https://notomorrowbrewing.com/beer/${brew.id}`}
+                    size={48}
+                    bgColor="#E8E6E1"
+                    fgColor="#0D0D0D"
+                    level="M"
+                  />
+                </div>
+              </div>
+              <p className="text-center text-stardust/50 text-[8px] mb-2">
+                Scan for details
               </p>
-              <p
-                className="text-art-deco-brass text-xs tracking-[0.2em] uppercase"
-                style={{ fontFamily: '"Josefin Sans", sans-serif' }}
-              >
-                Brewing Co.
-              </p>
-            </div>
-            <div className="text-center mb-4">
-              <h4
-                className="text-stardust text-lg uppercase tracking-widest leading-tight"
-                style={{ fontFamily: '"Josefin Sans", sans-serif' }}
-              >
-                {brew.name}
-              </h4>
-              <p className="text-stardust/50 text-xs mt-1">{brew.style}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mb-4 text-center">
-              <div className="border border-art-deco-brass/25 p-2">
-                <p className="text-stardust/50 text-[10px] uppercase">ABV</p>
-                <p className="text-art-deco-brass text-lg">{brew.abv}%</p>
+
+              {/* Barcode */}
+              <div className="flex justify-center pt-2 border-t border-art-deco-brass/50 bg-void-black/70 -mx-4 -mb-4 px-4 pb-3">
+                <Barcode
+                  value={brew.id}
+                  width={1.2}
+                  height={30}
+                  fontSize={8}
+                  background="transparent"
+                  lineColor="#E8E6E1"
+                  margin={0}
+                  displayValue={true}
+                />
               </div>
-              <div className="border border-art-deco-brass/25 p-2">
-                <p className="text-stardust/50 text-[10px] uppercase">IBU</p>
-                <p className="text-oxidized-copper text-lg">{brew.ibu}</p>
-              </div>
-            </div>
-            {brew.hops && (
-              <div className="text-center mb-4 py-2 border-t border-b border-art-deco-brass/25">
-                <p className="text-stardust/50 text-[10px] uppercase mb-1">Hops</p>
-                <p className="text-stardust text-xs">{brew.hops}</p>
-              </div>
-            )}
-            <div className="text-center mb-4">
-              <p className="text-stardust/50 text-[10px] uppercase">Brewed</p>
-              <p className="text-stardust text-sm">{formatDate(brew.brew_date)}</p>
-            </div>
-            <div className="flex justify-center pt-2 border-t border-art-deco-brass/50">
-              <Barcode
-                value={brew.id}
-                width={1.5}
-                height={40}
-                fontSize={10}
-                background="#0D0D0D"
-                lineColor="#E8E6E1"
-                margin={0}
-                displayValue={true}
-              />
             </div>
           </div>
         </div>

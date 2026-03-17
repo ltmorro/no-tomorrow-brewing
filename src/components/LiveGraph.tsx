@@ -1,147 +1,33 @@
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
 import type { TiltReading } from '../types/brew';
+import { ChartSkeleton } from './Skeletons';
+import {
+  filterReadingsByDays,
+  sortReadingsChronologically,
+  prepareChartData,
+} from '../utils/brewCalculations';
+import { getFermentationChartOptions } from '../utils/chartConfig';
 
 interface Props {
   readings: TiltReading[];
   brewName: string;
+  loading?: boolean;
 }
 
-export default function LiveGraph({ readings, brewName }: Props) {
-  // Filter to last 14 days and sort by timestamp ascending
-  const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
-  const filteredReadings = readings
-    .filter((r) => new Date(r.timestamp).getTime() > fourteenDaysAgo)
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+export default function LiveGraph({ readings, brewName, loading = false }: Props) {
+  if (loading) {
+    return <ChartSkeleton />;
+  }
 
-  // Prepare series data
-  const gravityData = filteredReadings.map((r) => [
-    new Date(r.timestamp).getTime(),
-    r.sg,
-  ]);
+  // Filter to last 14 days and sort chronologically using shared utilities
+  const filteredReadings = sortReadingsChronologically(
+    filterReadingsByDays(readings, 14)
+  );
 
-  const tempData = filteredReadings.map((r) => [
-    new Date(r.timestamp).getTime(),
-    r.temp,
-  ]);
-
-  const options: Highcharts.Options = {
-    chart: {
-      backgroundColor: '#161616',
-      style: {
-        fontFamily: '"Space Mono", monospace',
-      },
-      height: 350,
-    },
-    title: {
-      text: undefined,
-    },
-    credits: {
-      enabled: false,
-    },
-    legend: {
-      enabled: true,
-      itemStyle: {
-        color: '#E8E6E1',
-        fontWeight: '400',
-      },
-      itemHoverStyle: {
-        color: '#D4AF37',
-      },
-    },
-    xAxis: {
-      type: 'datetime',
-      lineColor: '#D4AF37',
-      tickColor: '#D4AF37',
-      labels: {
-        style: {
-          color: '#E8E6E1',
-          fontSize: '10px',
-        },
-      },
-      gridLineWidth: 0,
-    },
-    yAxis: [
-      {
-        // Primary Y-axis: Gravity (left)
-        title: {
-          text: 'Gravity (SG)',
-          style: {
-            color: '#4B7F78',
-          },
-        },
-        labels: {
-          format: '{value:.3f}',
-          style: {
-            color: '#4B7F78',
-          },
-        },
-        lineColor: '#4B7F78',
-        lineWidth: 1,
-        gridLineWidth: 0,
-      },
-      {
-        // Secondary Y-axis: Temperature (right)
-        title: {
-          text: 'Temp (°F)',
-          style: {
-            color: '#D4AF37',
-          },
-        },
-        labels: {
-          format: '{value}°',
-          style: {
-            color: '#D4AF37',
-          },
-        },
-        opposite: true,
-        lineColor: '#D4AF37',
-        lineWidth: 1,
-        gridLineWidth: 0,
-      },
-    ],
-    tooltip: {
-      shared: true,
-      backgroundColor: '#0D0D0D',
-      borderColor: '#D4AF37',
-      borderWidth: 1,
-      style: {
-        color: '#E8E6E1',
-      },
-      xDateFormat: '%b %d, %H:%M',
-    },
-    plotOptions: {
-      series: {
-        marker: {
-          enabled: true,
-          radius: 2,
-        },
-      },
-    },
-    series: [
-      {
-        name: 'Gravity',
-        type: 'line',
-        data: gravityData,
-        color: '#4B7F78',
-        yAxis: 0,
-        marker: {
-          symbol: 'diamond',
-          radius: 3,
-        },
-      },
-      {
-        name: 'Temperature',
-        type: 'spline',
-        data: tempData,
-        color: '#D4AF37',
-        yAxis: 1,
-        marker: {
-          enabled: false,
-        },
-      },
-    ],
-  };
+  // Prepare chart data and options using shared utilities
+  const { gravityData, tempData } = prepareChartData(filteredReadings);
+  const options = getFermentationChartOptions(gravityData, tempData, 350);
 
   if (filteredReadings.length === 0) {
     return (

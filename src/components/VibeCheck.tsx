@@ -16,25 +16,21 @@ export default function VibeCheck({ spotifyId, showTitle = true }: Props) {
   useEffect(() => {
     const fetchAlbumArt = async () => {
       try {
-        // Spotify oEmbed API - no auth required
-        const response = await fetch(
-          `https://open.spotify.com/oembed?url=https://open.spotify.com/album/${spotifyId}`
-        );
+        // Call our internal API route
+        const response = await fetch(`/api/spotify-metadata?id=${spotifyId}`);
+        
+        if (!response.ok) throw new Error('Failed to fetch metadata');
+        
         const data = await response.json();
 
         if (data.thumbnail_url) {
-          // Create image element for ColorThief
           const img = new Image();
           img.crossOrigin = 'Anonymous';
-
-          // Use a CORS proxy for the Spotify CDN image
-          // Spotify's CDN supports CORS, but we need to ensure the request is made correctly
           img.src = data.thumbnail_url;
 
           img.onload = () => {
             try {
               const colorThief = new ColorThief();
-              // Get 5 colors from the palette
               const extractedPalette = colorThief.getPalette(img, 5) as RGB[];
               setPalette(extractedPalette);
               setIsLoaded(true);
@@ -64,11 +60,8 @@ export default function VibeCheck({ spotifyId, showTitle = true }: Props) {
 
   // Generate gradient glow style from palette
   const getGlowStyle = (): React.CSSProperties => {
-    if (!palette || palette.length < 3) {
-      return {};
-    }
+    if (!palette || palette.length < 3) return {};
 
-    // Use the dominant colors for the glow
     const [primary, secondary, tertiary] = palette;
     const rgbToString = (rgb: RGB, alpha: number) =>
       `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
@@ -96,7 +89,6 @@ export default function VibeCheck({ spotifyId, showTitle = true }: Props) {
         }`}
         style={isLoaded ? getGlowStyle() : {}}
       >
-        {/* Gradient background overlay for extra effect */}
         {palette && (
           <div
             className="absolute inset-0 -z-10 blur-2xl opacity-0 group-hover:opacity-50 transition-opacity duration-500"
@@ -110,6 +102,7 @@ export default function VibeCheck({ spotifyId, showTitle = true }: Props) {
         )}
         <div className="grayscale transition-all duration-500 group-hover:grayscale-0">
           <iframe
+            // FIX: Use the official standard Embed URL
             src={`https://open.spotify.com/embed/album/${spotifyId}?utm_source=generator&theme=0`}
             width="100%"
             height="152"

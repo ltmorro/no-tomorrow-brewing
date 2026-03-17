@@ -2,7 +2,8 @@
 import Layout from '../layouts/Layout.astro';
 import FermentationCard from '../components/FermentationCard.astro';
 import LiveGraph from '../components/LiveGraph';
-import { fetchBrews, fetchTiltData, getBrewsByStatus } from '../utils/googleSheets';
+import SpotifyEmbed from '../components/SpotifyEmbed';
+import { fetchBrews, fetchTiltData, fetchFermentationDataBySheetId, getBrewsByStatus } from '../utils/googleSheets';
 import { format } from 'date-fns';
 
 const brews = await fetchBrews();
@@ -12,9 +13,11 @@ const onTap = getBrewsByStatus(brews, 'On Tap');
 // Fetch Tilt data for each fermenting brew
 const fermentingWithData = await Promise.all(
   fermenting.map(async (brew) => {
-    const readings = brew.tilt_color
-      ? await fetchTiltData(brew.tilt_color)
-      : [];
+    const readings = brew.tilt_sheet_id
+      ? await fetchFermentationDataBySheetId(brew.tilt_sheet_id)
+      : brew.tilt_color
+        ? await fetchTiltData(brew.tilt_color)
+        : [];
     return { brew, readings };
   })
 );
@@ -154,6 +157,15 @@ const systemStatus = getSystemStatus();
                     client:only="react"
                   />
                 </div>
+              )}
+
+              {brew.spotify_id && (
+                <SpotifyEmbed
+                  spotifyId={brew.spotify_id}
+                  spotifyType={brew.spotify_type ?? 'album'}
+                  title="Fermenting To"
+                  client:load
+                />
               )}
             </div>
           ))}

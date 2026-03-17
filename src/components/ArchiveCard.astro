@@ -1,6 +1,7 @@
 ---
 import { format } from 'date-fns';
 import type { Brew } from '../types/brew';
+import { calculateAttenuation } from '../utils/brewCalculations';
 
 interface Props {
   brew: Brew;
@@ -11,7 +12,7 @@ const { brew, index = 0 } = Astro.props;
 const brewDate = new Date(brew.brew_date);
 const formattedDate = format(brewDate, 'MMM d, yyyy');
 const yearBrewed = format(brewDate, 'yyyy');
-const attenuation = brew.og > 0 ? Math.round(((brew.og - brew.fg) / (brew.og - 1)) * 100) : 0;
+const attenuation = calculateAttenuation(brew.og, brew.fg);
 
 // Calculate color intensity based on OG (darker beers tend to have higher OG)
 const getColorClass = () => {

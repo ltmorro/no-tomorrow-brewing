@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import VibeCheck from '../components/VibeCheck';
 import LibraryBrowser from '../components/LibraryBrowser';
-import { fetchBrews, fetchHistoricalTiltData, fetchFermentationDataBySheetId, getBrewsByStatus } from '../utils/googleSheets';
+import { fetchBrews, getBrewsByStatus } from '../utils/googleSheets';
 
 const brews = await fetchBrews();
 const archive = getBrewsByStatus(brews, 'Archive');
@@ -14,19 +14,8 @@ const libraryBrews = [...onTap, ...archive];
 // Sort by brew date descending
 libraryBrews.sort((a, b) => new Date(b.brew_date).getTime() - new Date(a.brew_date).getTime());
 
-// Fetch historical Tilt data for each library brew
-// Use tilt_sheet_id if available, otherwise fall back to fetching by name
-const libraryWithData = await Promise.all(
-  libraryBrews.map(async (brew) => {
-    let readings;
-    if (brew.tilt_sheet_id) {
-      readings = await fetchFermentationDataBySheetId(brew.tilt_sheet_id);
-    } else {
-      readings = await fetchHistoricalTiltData(brew.name);
-    }
-    return { brew, readings };
-  })
-);
+// NOTE: Fermentation data is now fetched lazily on the client when a user opens a beer modal.
+// This avoids N+1 requests at build time that would cause rate limiting with many brews.
 
 // Get featured brew with spotify embed
 const featuredBrew = libraryBrews.find(b => b.spotify_id);
@@ -180,7 +169,7 @@ const topStyles = Object.entries(styleCount)
 
     <!-- ARCHIVE BROWSER -->
     <section class="max-w-6xl mx-auto px-8 py-16">
-      <LibraryBrowser brews={libraryWithData} client:load />
+      <LibraryBrowser brews={libraryBrews} client:load />
     </section>
 
     <!-- FOOTER DECORATION -->

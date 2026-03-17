@@ -10,8 +10,10 @@ export interface Brew {
   status: BrewStatus;
   og: number;
   fg: number;
+  srm?: number; // Standard Reference Method (beer color: 2-40+)
   hops: string;
   spotify_id?: string;
+  spotify_type?: 'album' | 'playlist';
   tilt_color?: string;
   tilt_sheet_id?: string; // Google Sheet ID for fermentation data
 }

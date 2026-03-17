@@ -1,54 +1,144 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+const errorMessages = [
+  "Looks like someone drank the last pour.",
+  "This batch went down the drain.",
+  "Our Tilt sensor can't find this one.",
+  "Must've evaporated during fermentation.",
+  "The yeast ate this page too.",
+];
+const randomMessage = errorMessages[Math.floor(Math.random() * errorMessages.length)];
 ---
 
-<Layout title="404 - No Tomorrow Brewing">
-  <main class="min-h-[80vh] flex flex-col items-center justify-center px-8 py-20">
+<Layout title="404 - Keg Kicked | No Tomorrow Brewing">
+  <main class="min-h-[80vh] flex flex-col items-center justify-center px-8 py-20 relative overflow-hidden">
 
-    <!-- Glitchy 404 display -->
-    <div class="relative mb-8">
-      <span class="font-mono text-[12rem] md:text-[16rem] font-bold text-art-deco-brass/10 leading-none select-none">
-        404
-      </span>
-      <div class="absolute inset-0 flex items-center justify-center">
-        <span class="font-mono text-6xl md:text-8xl font-bold text-art-deco-brass">
-          404
-        </span>
-      </div>
+    <!-- Background decoration - empty keg outline -->
+    <div class="absolute inset-0 flex items-center justify-center opacity-[0.02] pointer-events-none">
+      <svg viewBox="0 0 100 150" class="w-96 h-auto" fill="none" stroke="currentColor" stroke-width="0.5">
+        <ellipse cx="50" cy="15" rx="35" ry="10" />
+        <ellipse cx="50" cy="135" rx="35" ry="10" />
+        <path d="M15 15 L15 135" />
+        <path d="M85 15 L85 135" />
+        <path d="M25 75 L75 75" stroke-dasharray="4 4" />
+      </svg>
     </div>
 
-    <!-- Message -->
+    <!-- Floating bubbles (empty vessel humor) -->
+    <div class="absolute inset-0 pointer-events-none">
+      <div class="absolute left-1/4 bottom-1/3 w-2 h-2 border border-stardust/10 rounded-full bubble" style="--duration: 4s; --delay: 0s;"></div>
+      <div class="absolute left-1/3 bottom-1/4 w-1 h-1 border border-stardust/5 rounded-full bubble" style="--duration: 5s; --delay: 1s;"></div>
+      <div class="absolute right-1/3 bottom-1/3 w-1.5 h-1.5 border border-stardust/10 rounded-full bubble" style="--duration: 4.5s; --delay: 0.5s;"></div>
+      <div class="absolute right-1/4 bottom-1/4 w-1 h-1 border border-stardust/5 rounded-full bubble" style="--duration: 5.5s; --delay: 2s;"></div>
+    </div>
+
+    <!-- Glitchy 404 display with scramble effect -->
+    <div class="relative mb-6">
+      <span class="font-mono text-[10rem] md:text-[14rem] font-bold text-art-deco-brass/5 leading-none select-none absolute inset-0 flex items-center justify-center blur-sm">
+        404
+      </span>
+      <span id="error-code" class="font-mono text-[10rem] md:text-[14rem] font-bold text-art-deco-brass leading-none select-none relative glitch-text tabular-nums">
+        404
+      </span>
+    </div>
+
+    <!-- Kicked keg indicator -->
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-3 h-3 bg-nebula-red rounded-full animate-pulse"></div>
+      <span class="font-mono text-xs text-nebula-red uppercase tracking-widest">Keg Kicked</span>
+    </div>
+
+    <!-- Main message -->
     <h1 class="font-sans uppercase font-semibold text-2xl md:text-3xl tracking-widest text-stardust text-center mb-4">
-      Keg Not Found
+      Nothing to Pour Here
     </h1>
 
-    <p class="font-mono text-stardust/50 text-center max-w-md mb-8">
-      Looks like this batch was kicked before you got here.
+    <p class="font-mono text-stardust/50 text-center max-w-md mb-2">
+      {randomMessage}
+    </p>
+
+    <p class="font-mono text-stardust/30 text-center text-sm max-w-md mb-8">
       The page you're looking for doesn't exist or has been moved.
     </p>
 
+    <!-- Terminal-style error log -->
+    <div class="border border-art-deco-brass/20 bg-void-black/50 p-4 mb-8 max-w-md w-full">
+      <div class="flex items-center gap-2 mb-2">
+        <div class="w-2 h-2 rounded-full bg-nebula-red"></div>
+        <div class="w-2 h-2 rounded-full bg-art-deco-brass/50"></div>
+        <div class="w-2 h-2 rounded-full bg-oxidized-copper/50"></div>
+        <span class="font-mono text-[10px] text-stardust/30 ml-2">brew.log</span>
+      </div>
+      <div class="font-mono text-xs text-stardust/40 space-y-1">
+        <p><span class="text-oxidized-copper">$</span> fetch /requested/path</p>
+        <p><span class="text-nebula-red">ERR</span> Resource not found in taproom</p>
+        <p><span class="text-nebula-red">ERR</span> Keg status: KICKED</p>
+        <p><span class="text-art-deco-brass">INFO</span> Redirecting to nearest pour...<span class="animate-pulse">_</span></p>
+      </div>
+    </div>
+
     <!-- Decorative divider -->
     <div class="flex items-center gap-4 mb-8">
-      <div class="w-8 h-px art-deco-line"></div>
+      <div class="w-12 h-px art-deco-line"></div>
       <div class="w-2 h-2 border border-art-deco-brass/50 rotate-45"></div>
-      <div class="w-8 h-px art-deco-line"></div>
+      <div class="w-12 h-px art-deco-line"></div>
     </div>
 
     <!-- Navigation options -->
     <div class="flex flex-col sm:flex-row gap-4">
       <a
         href="/"
-        class="font-mono text-sm px-6 py-3 border border-art-deco-brass text-art-deco-brass hover:bg-art-deco-brass hover:text-void-black transition-colors text-center"
+        class="group font-mono text-sm px-6 py-3 border border-art-deco-brass text-art-deco-brass hover:bg-art-deco-brass hover:text-void-black transition-colors text-center flex items-center justify-center gap-2"
       >
-        Back to Taproom
+        <span>Fresh Pour</span>
+        <span class="group-hover:translate-x-1 transition-transform">&rarr;</span>
       </a>
       <a
         href="/library"
         class="font-mono text-sm px-6 py-3 border border-stardust/30 text-stardust/70 hover:border-stardust hover:text-stardust transition-colors text-center"
       >
-        Browse Library
+        Browse Archives
       </a>
     </div>
 
+    <!-- Fun footer message -->
+    <p class="font-mono text-[10px] text-stardust/20 mt-12 text-center">
+      In the void, no one can hear you pour.
+    </p>
+
   </main>
 </Layout>
+
+<script>
+  // Scramble effect for the 404 number
+  function scramble404() {
+    const element = document.getElementById('error-code');
+    if (!element) return;
+
+    const chars = '0123456789';
+    const duration = 1200;
+    const interval = 60;
+    let elapsed = 0;
+
+    const scrambleInterval = setInterval(() => {
+      elapsed += interval;
+
+      if (elapsed < duration) {
+        // Generate random 3-digit number
+        let scrambled = '';
+        for (let i = 0; i < 3; i++) {
+          scrambled += chars[Math.floor(Math.random() * chars.length)];
+        }
+        element.textContent = scrambled;
+      } else {
+        clearInterval(scrambleInterval);
+        element.textContent = '404';
+      }
+    }, interval);
+  }
+
+  // Run on page load
+  document.addEventListener('DOMContentLoaded', scramble404);
+  document.addEventListener('astro:page-load', scramble404);
+</script>
