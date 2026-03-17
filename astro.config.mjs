@@ -19,4 +19,11 @@ export default defineConfig({
       },
     }),
   ],
+  vite: {
+    ssr: {
+      resolve: {
+        conditions: ['workerd', 'worker', 'browser'],
+      },
+    },
+  },
 });
