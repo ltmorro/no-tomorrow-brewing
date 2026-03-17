@@ -271,6 +271,116 @@ body::before {
   animation: scramble-flicker 0.05s ease-in-out infinite;
 }
 
+/* Skeleton loader animations */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes skeleton-scan {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes skeleton-line-draw {
+  0% {
+    stroke-dashoffset: 1000;
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.2;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(212, 175, 55, 0.05) 0%,
+    rgba(212, 175, 55, 0.15) 50%,
+    rgba(212, 175, 55, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-scan-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(212, 175, 55, 0.5),
+    transparent
+  );
+  animation: skeleton-scan 2s ease-in-out infinite;
+}
+
+.skeleton-line-gravity {
+  stroke-dasharray: 500;
+  stroke-dashoffset: 500;
+  animation: skeleton-line-draw 3s ease-in-out infinite;
+}
+
+.skeleton-line-temp {
+  stroke-dasharray: 500;
+  stroke-dashoffset: 500;
+  animation: skeleton-line-draw 3s ease-in-out infinite;
+  animation-delay: 0.5s;
+}
+
+/* 404 page glitch effect */
+@keyframes glitch-shift {
+  0%, 100% {
+    transform: translate(0);
+    text-shadow: none;
+  }
+  10% {
+    transform: translate(-2px, -1px);
+    text-shadow: 2px 0 #4B7F78, -2px 0 #B84A4A;
+  }
+  20% {
+    transform: translate(2px, 1px);
+    text-shadow: -2px 0 #4B7F78, 2px 0 #B84A4A;
+  }
+  30%, 90% {
+    transform: translate(0);
+    text-shadow: none;
+  }
+}
+
+@keyframes glitch-flicker {
+  0%, 100% { opacity: 1; }
+  10% { opacity: 0.8; }
+  15% { opacity: 1; }
+  20% { opacity: 0.9; }
+  50% { opacity: 1; }
+  55% { opacity: 0.7; }
+  60% { opacity: 1; }
+}
+
+.glitch-text {
+  animation: glitch-shift 4s ease-in-out infinite, glitch-flicker 3s ease-in-out infinite;
+}
+
 /* Print styles */
 @media print {
   /* Reset background for printing */

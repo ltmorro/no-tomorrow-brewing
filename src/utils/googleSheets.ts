@@ -13,6 +13,45 @@ function buildSheetUrl(sheetId: string, tabName: string = 'Data'): string {
   return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
 }
 
+/**
+ * Parse a CSV row into a TiltReading object
+ * Handles various column name formats from different Google Sheet exports
+ */
+function parseTiltRow(row: Record<string, string>): TiltReading {
+  return {
+    timestamp: row.Timestamp || row.timestamp || '',
+    sg: parseFloat(row.SG || row.sg) || 0,
+    temp: parseFloat(row.Temp || row.temp) || 0,
+    color: (row.Color || row.color || '').toUpperCase(),
+    beer_name: row.Beer || row['Beer Name'] || row.beer_name || '',
+    comment: row.Comment || row.comment || undefined,
+  };
+}
+
+/**
+ * Get sample Tilt readings, optionally filtered by color or beer name
+ */
+async function getSampleTiltReadings(options?: {
+  color?: string;
+  beerName?: string;
+}): Promise<TiltReading[]> {
+  const { sampleTiltReadings } = await import('../data/sample');
+
+  if (options?.color) {
+    return sampleTiltReadings.filter(
+      (r) => r.color.toLowerCase() === options.color!.toLowerCase()
+    );
+  }
+
+  if (options?.beerName) {
+    return sampleTiltReadings.filter(
+      (r) => r.beer_name.toLowerCase() === options.beerName!.toLowerCase()
+    );
+  }
+
+  return sampleTiltReadings;
+}
+
 export async function fetchBrews(): Promise<Brew[]> {
   if (!MASTER_LOG_URL) {
     console.warn('No Google Sheets URL configured, using sample data');
@@ -41,6 +80,7 @@ export async function fetchBrews(): Promise<Brew[]> {
       fg: parseFloat(row.fg) || 0,
       hops: row.hops || '',
       spotify_id: row.spotify_id || undefined,
+      spotify_type: (row.spotify_type as Brew['spotify_type']) || undefined,
       tilt_color: row.tilt_color || undefined,
       tilt_sheet_id: row.tilt_sheet_id || undefined,
     }));
@@ -54,10 +94,7 @@ export async function fetchBrews(): Promise<Brew[]> {
 export async function fetchTiltData(color?: string): Promise<TiltReading[]> {
   if (!TILT_DATA_URL) {
     console.warn('No Tilt data URL configured, using sample data');
-    const { sampleTiltReadings } = await import('../data/sample');
-    return color
-      ? sampleTiltReadings.filter(r => r.color.toLowerCase() === color.toLowerCase())
-      : sampleTiltReadings;
+    return getSampleTiltReadings({ color });
   }
 
   try {
@@ -69,17 +106,10 @@ export async function fetchTiltData(color?: string): Promise<TiltReading[]> {
       skipEmptyLines: true,
     });
 
-    let readings = data.map((row) => ({
-      timestamp: row.Timestamp || row.timestamp || '',
-      sg: parseFloat(row.SG || row.sg) || 0,
-      temp: parseFloat(row.Temp || row.temp) || 0,
-      color: row.Color || row.color || '',
-      beer_name: row['Beer Name'] || row.beer_name || '',
-      comment: row.Comment || row.comment || undefined,
-    }));
+    let readings = data.map(parseTiltRow);
 
     if (color) {
-      readings = readings.filter(r => r.color.toLowerCase() === color.toLowerCase());
+      readings = readings.filter((r) => r.color.toLowerCase() === color.toLowerCase());
     }
 
     // Sort by timestamp descending and limit to last 14 days
@@ -87,14 +117,11 @@ export async function fetchTiltData(color?: string): Promise<TiltReading[]> {
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
     return readings
-      .filter(r => new Date(r.timestamp) >= fourteenDaysAgo)
+      .filter((r) => new Date(r.timestamp) >= fourteenDaysAgo)
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   } catch (error) {
     console.error('Error fetching Tilt data:', error);
-    const { sampleTiltReadings } = await import('../data/sample');
-    return color
-      ? sampleTiltReadings.filter(r => r.color.toLowerCase() === color.toLowerCase())
-      : sampleTiltReadings;
+    return getSampleTiltReadings({ color });
   }
 }
 
@@ -105,10 +132,7 @@ export function getBrewsByStatus(brews: Brew[], status: Brew['status']): Brew[] 
 export async function fetchHistoricalTiltData(beerName: string): Promise<TiltReading[]> {
   if (!TILT_DATA_URL) {
     console.warn('No Tilt data URL configured, using sample data');
-    const { sampleTiltReadings } = await import('../data/sample');
-    return sampleTiltReadings.filter(r =>
-      r.beer_name.toLowerCase() === beerName.toLowerCase()
-    );
+    return getSampleTiltReadings({ beerName });
   }
 
   try {
@@ -121,26 +145,16 @@ export async function fetchHistoricalTiltData(beerName: string): Promise<TiltRea
     });
 
     const readings = data
-      .map((row) => ({
-        timestamp: row.Timestamp || row.timestamp || '',
-        sg: parseFloat(row.SG || row.sg) || 0,
-        temp: parseFloat(row.Temp || row.temp) || 0,
-        color: row.Color || row.color || '',
-        beer_name: row['Beer Name'] || row.beer_name || '',
-        comment: row.Comment || row.comment || undefined,
-      }))
-      .filter(r => r.beer_name.toLowerCase() === beerName.toLowerCase());
+      .map(parseTiltRow)
+      .filter((r) => r.beer_name.toLowerCase() === beerName.toLowerCase());
 
     // Sort by timestamp ascending for chronological display
-    return readings.sort((a, b) =>
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    return readings.sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
   } catch (error) {
     console.error('Error fetching historical Tilt data:', error);
-    const { sampleTiltReadings } = await import('../data/sample');
-    return sampleTiltReadings.filter(r =>
-      r.beer_name.toLowerCase() === beerName.toLowerCase()
-    );
+    return getSampleTiltReadings({ beerName });
   }
 }
 
@@ -158,8 +172,7 @@ export async function fetchFermentationDataBySheetId(
 ): Promise<TiltReading[]> {
   if (!sheetId) {
     console.warn('No sheet ID provided, using sample data');
-    const { sampleTiltReadings } = await import('../data/sample');
-    return sampleTiltReadings;
+    return getSampleTiltReadings();
   }
 
   try {
@@ -177,22 +190,79 @@ export async function fetchFermentationDataBySheetId(
       skipEmptyLines: true,
     });
 
-    const readings: TiltReading[] = data.map((row: Record<string, string>) => ({
-      timestamp: row.Timestamp || row.timestamp || '',
-      sg: parseFloat(row.SG || row.sg) || 0,
-      temp: parseFloat(row.Temp || row.temp) || 0,
-      color: (row.Color || row.color || '').toUpperCase(),
-      beer_name: row.Beer || row['Beer Name'] || row.beer_name || '',
-      comment: row.Comment || row.comment || undefined,
-    }));
+    const readings = data.map(parseTiltRow);
 
     // Sort by timestamp ascending for chronological display
-    return readings.sort((a, b) =>
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    return readings.sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
   } catch (error) {
     console.error('Error fetching fermentation data from sheet:', error);
-    const { sampleTiltReadings } = await import('../data/sample');
-    return sampleTiltReadings;
+    return getSampleTiltReadings();
+  }
+}
+
+/**
+ * Client-side function to fetch fermentation data for a brew.
+ * Uses tilt_sheet_id if available, otherwise falls back to fetching by name from global Tilt data.
+ * Returns empty array on error rather than sample data (appropriate for client-side).
+ *
+ * @param brew - The brew to fetch fermentation data for
+ * @returns Promise<TiltReading[]> - Array of readings, or empty array if none found
+ */
+export async function fetchFermentationDataForBrew(brew: {
+  name: string;
+  tilt_sheet_id?: string;
+}): Promise<TiltReading[]> {
+  try {
+    if (brew.tilt_sheet_id) {
+      // Fetch from brew-specific sheet
+      const url = buildSheetUrl(brew.tilt_sheet_id, 'Data');
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        console.warn(`Failed to fetch sheet for ${brew.name}: ${response.status}`);
+        return [];
+      }
+
+      const csvText = await response.text();
+      const { data } = Papa.parse<Record<string, string>>(csvText, {
+        header: true,
+        skipEmptyLines: true,
+      });
+
+      const readings = data.map(parseTiltRow);
+      return readings.sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+    }
+
+    // Fall back to global Tilt data URL if available
+    if (TILT_DATA_URL) {
+      const response = await fetch(TILT_DATA_URL);
+      if (!response.ok) {
+        console.warn(`Failed to fetch global Tilt data: ${response.status}`);
+        return [];
+      }
+
+      const csvText = await response.text();
+      const { data } = Papa.parse<Record<string, string>>(csvText, {
+        header: true,
+        skipEmptyLines: true,
+      });
+
+      const readings = data
+        .map(parseTiltRow)
+        .filter((r) => r.beer_name.toLowerCase() === brew.name.toLowerCase());
+
+      return readings.sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+    }
+
+    return [];
+  } catch (error) {
+    console.error(`Error fetching fermentation data for ${brew.name}:`, error);
+    return [];
   }
 }

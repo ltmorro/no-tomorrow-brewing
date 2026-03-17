@@ -1,0 +1,30 @@
+---
+import { fetchBrews } from '../../utils/googleSheets';
+import type { Brew } from '../../types/brew';
+
+export async function getStaticPaths() {
+  const brews = await fetchBrews();
+  return brews.map(brew => ({
+    params: { id: brew.id },
+    props: { brew },
+  }));
+}
+
+interface Props {
+  brew: Brew;
+}
+
+const { brew } = Astro.props;
+const { id } = Astro.params;
+
+// Redirect to appropriate page based on beer status
+const destinations: Record<string, string> = {
+  'On Tap': `/?beer=${id}`,
+  'Kicked': `/?beer=${id}`,
+  'Fermenting': `/mission-control?beer=${id}`,
+  'Archive': `/library?beer=${id}`,
+};
+
+const destination = destinations[brew.status] || `/library?beer=${id}`;
+return Astro.redirect(destination);
+---

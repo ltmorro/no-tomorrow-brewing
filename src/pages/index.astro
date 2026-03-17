@@ -1,8 +1,7 @@
 ---
 import { Icon } from 'astro-icon/components';
 import Layout from '../layouts/Layout.astro';
-import TapCard from '../components/TapCard.astro';
-import TapModal from '../components/TapModal';
+import TapCardWithModal from '../components/TapCardWithModal';
 import VibeCheck from '../components/VibeCheck';
 import { fetchBrews, fetchTiltData, fetchHistoricalTiltData, fetchFermentationDataBySheetId, getBrewsByStatus } from '../utils/googleSheets';
 
@@ -223,10 +222,7 @@ const vibeableBeer = onTap.find(b => b.spotify_id) || brews.find(b => b.spotify_
       {tapListWithData.length > 0 ? (
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {tapListWithData.map(({ brew, readings }, index) => (
-            <div class="flex flex-col gap-3">
-              <TapCard brew={brew} index={index} />
-              <TapModal brew={brew} readings={readings} client:load />
-            </div>
+            <TapCardWithModal brew={brew} readings={readings} index={index} client:load />
           ))}
         </div>
       ) : (
