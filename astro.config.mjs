@@ -20,9 +20,9 @@ export default defineConfig({
     }),
   ],
   vite: {
-    ssr: {
-      resolve: {
-        conditions: ['workerd', 'worker', 'browser'],
+    resolve: {
+      alias: {
+        'react-dom/server': 'react-dom/server.edge',
       },
     },
   },
